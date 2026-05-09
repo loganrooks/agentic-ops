@@ -33,6 +33,7 @@
 ### P3-T2 — Widen trigger if-clause
 
 - Edit `review.yml` if-clause to allow audit on non-PR issues:
+
   ```yaml
   if: |
     github.event_name == 'issue_comment' &&
@@ -61,6 +62,7 @@
 ### P3-T4 — Add audit case to dispatcher (with target parsing)
 
 - Edit dispatcher case statement:
+
   ```bash
   "@claude audit"|"@claude audit "*|"@claude audit:"*)
     mode=audit
@@ -255,7 +257,7 @@ Full text inserted by P3-T6. Critical content artifact — review carefully befo
     - Each finding: title, evidence (file:line citations), reasoning,
       recommended action.
     - If body exceeds ~50KB:
-        - Split into ./central/.github/scripts/post-claude-review.sh
+        - Split into ./.github/scripts/post-claude-review.sh
           invocations, one per chunk, each prefixed with [Audit N/M]
         - Order: critical chunks first, then warnings, then
           suggestions.

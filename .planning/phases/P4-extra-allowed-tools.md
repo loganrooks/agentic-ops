@@ -106,7 +106,7 @@
   env:
     EXTRA: ${{ inputs.extra_allowed_tools }}
   run: |
-    base='Bash(gh pr view:*),Bash(gh pr diff:*),Bash(./central/.github/scripts/post-claude-review.sh:*)'
+    base='Bash(gh pr view:*),Bash(gh pr diff:*),Bash(./.github/scripts/post-claude-review.sh:*)'
     if [[ -n "${EXTRA//[[:space:]]/}" ]]; then
       full="${base},${EXTRA}"
     else

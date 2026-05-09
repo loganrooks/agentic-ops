@@ -26,9 +26,19 @@
 
 ## Tasks
 
-### P2-T1 — Read existing dispatcher state
+### P2-T0 — Fix pre-existing `central/` path bug in `review.yml`
+
+A pre-existing bug surfaced during P1.5 review: `review.yml` references the wrapper script as `./central/.github/scripts/post-claude-review.sh` (in the `--allowedTools` allowlist around line 244, plus two prompt-instruction blocks around lines 326 and 338), but the actual script is at `./.github/scripts/post-claude-review.sh`. The reusable workflow's checkout puts agentic-ops at the workspace root — there is no `central/` subdirectory. The mistake means any mode that actually invokes the wrapper (e.g., to post a review comment) would fail at the allowlist check or `Bash` step. P2 is the first phase that touches the prompt and allowlist surfaces, so the fix lands here.
 
 - **Precondition:** entered P2; on branch `feat/p2-survey-mode`
+- **Action:** Replace all three occurrences of `./central/.github/scripts/post-claude-review.sh` (and the variant `central/.github/scripts/post-claude-review.sh` without the leading `./`) in `.github/workflows/review.yml` with `./.github/scripts/post-claude-review.sh`. Verify with `grep -n "central/" .github/workflows/review.yml` returning zero hits.
+- **Action (cont'd):** Run `actionlint` to confirm the workflow still parses, and run the dispatcher smoke test to confirm no regression.
+- **Postcondition:** zero `central/` references remain in `review.yml`; `actionlint` and `test-dispatcher.sh` pass.
+- **Estimated time:** 5 min
+
+### P2-T1 — Read existing dispatcher state
+
+- **Precondition:** P2-T0 complete; on branch `feat/p2-survey-mode`
 - **Action:** Read `agentic-ops/.github/workflows/review.yml` lines 162-193 (mode dispatcher) and 273-311 (mode-behavior block); identify exact insertion points for new mode case + new behavior section.
 - **Postcondition:** Agent has memorized line numbers and insertion patterns; recorded in STATE.md `notes` field.
 - **Estimated time:** 5 min
@@ -44,6 +54,7 @@
 
 - **Precondition:** P2-T2 complete
 - **Action:** Edit `review.yml` mode dispatcher case statement; add line:
+
   ```bash
   "@claude survey"|"@claude survey "*) mode=survey; model=claude-sonnet-4-6 ;;
   ```
@@ -106,13 +117,14 @@
 ### P2-T11 — Write CHECKPOINT-P2
 
 - **Precondition:** P2-T10 complete
-- **Action:** Append CHECKPOINT-P2 entry to `.planning/auto-execution/CHECKPOINTS.md` with: merged PR URL, merge SHA, v1 tag SHA, test-dispatcher pass/fail, CodeRabbit findings count, any deviations from plan
-- **Postcondition:** CHECKPOINT-P2 present; STATE.md `current_phase` advanced to P3
+- **Action:** Write `.planning/auto-execution/checkpoints/CHECKPOINT-P2.md` with the per-phase detail (merged PR URL, merge SHA, v1 tag SHA, test-dispatcher pass/fail, CodeRabbit findings count, any deviations from plan, artifacts list)
+- **Action (cont'd):** Append a CHECKPOINT-P2 summary entry to `.planning/auto-execution/CHECKPOINTS.md` (the aggregate index) referencing the detail file
+- **Postcondition:** both CHECKPOINT-P2.md (detail) and CHECKPOINTS.md entry exist; STATE.md `current_phase` advanced to P3
 - **Estimated time:** 5 min
 
 ## Phase total estimate
 
-1.5 hours, 11 tasks, ~1 session.
+~1.5 hours, 12 tasks (T0..T11), ~1 session.
 
 ## Survey mode-behavior prompt template
 
@@ -179,7 +191,7 @@ The full text inserted by P2-T4. This is the critical content artifact of the ph
       Runtime: <approx-seconds>s | Run: <run_url>
 
   Post ONE comment via the wrapper script:
-      ./central/.github/scripts/post-claude-review.sh <pr> <<'EOF'
+      ./.github/scripts/post-claude-review.sh <pr> <<'EOF'
       <body>
       EOF
   If body exceeds ~50KB, prioritize critical/warning over suggestion;
