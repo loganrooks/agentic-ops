@@ -7,7 +7,7 @@ task definitions live in `phases/PN-*.md`.
 
 ## Sequence
 
-```
+```text
 P0  Bootstrap (auto-execution infra setup)
   ↓
 P1  A0 — Project hygiene (LICENSE, CONTRIBUTING, AGENTS, SECURITY, CI, ADRs)

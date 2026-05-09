@@ -7,9 +7,17 @@
 **Branch:** `feat/p8-observability`
 
 ## Phase entry preconditions
+
 - CHECKPOINT-P7 exists (multiple repos consuming, so observability has data to aggregate)
+- A GitHub token (PAT or App installation token) is available to the aggregator workflow with the scopes required for cross-repo aggregation:
+  - `repo` and `contents: read` on each consumer repo (to enumerate PRs/issues and read review comments)
+  - `issues: write` on each consumer repo (to post the Weekly Health issue)
+  - `actions: read` on each consumer repo (to enumerate workflow runs for cost/runtime aggregation)
+  Use a fine-scoped PAT stored as `WEEKLY_HEALTH_TOKEN` in agentic-ops repo secrets, OR a GitHub App installed on every consumer repo with the same scopes. Without these scopes, P8-T1 cannot complete — escalate as HUMAN-GATE before phase entry.
+- All consumer repos identifiable: each onboarded caller stub from P7 includes a discoverable marker (e.g., the `repo_label` input or a known stub-file path) so the aggregator enumerates targets without hardcoding.
 
 ## Phase exit postconditions
+
 - `agentic-ops/.github/workflows/weekly-health.yml` exists and passes actionlint
 - `agentic-ops/.github/ISSUE_TEMPLATE/missed-signal.md` exists and renders in GitHub UI
 - `agentic-ops/docs/observability.md` exists; linked from README.md
@@ -18,6 +26,7 @@
 ## Tasks
 
 ### P8-T1 — Add aggregator workflow
+
 - **Action:** Create `.github/workflows/weekly-health.yml`:
   - `on: schedule` (weekly, Sundays UTC)
   - `workflow_dispatch` for manual trigger
@@ -27,6 +36,7 @@
 - **Time:** ~90 min.
 
 ### P8-T2 — Missed-signal issue template
+
 - **Action:** Create `.github/ISSUE_TEMPLATE/missed-signal.md`. Required fields:
   - Original PR/audit URL
   - Finding that was missed (verbatim from human or external reviewer)
@@ -36,6 +46,7 @@
 - **Time:** ~15 min.
 
 ### P8-T3 — Documentation
+
 - **Action:** Add `docs/observability.md` describing:
   - The metadata footer schema (Mode/Lens/Model/Files-read/Runtime/SHA/Run URL)
   - The aggregator workflow's output format
@@ -46,9 +57,11 @@
 - **Time:** ~30 min.
 
 ### P8-T4..T8 — Local validation, PR open, wait CI + CodeRabbit, merge after maintainer signal, v1 tag, checkpoint
+
 - Mirror the standard phase-tail pattern used in P1, P2, P3, P4.
 
 ## Phase total estimate
+
 3-4 hrs.
 
 ## Aggregator workflow design notes
@@ -73,6 +86,7 @@ When a reviewer (human or automated) catches something the Claude review missed:
 This creates the registry-of-patterns referenced in VISION.md §3.6.
 
 ## References
+
 - ADR-005 — Audit output format (defines the metadata footer)
 - VISION.md §3.6 — stateless agents, persistent registry
 - `phases/P7-onboarding.md` — must merge first; observability needs multiple consumer repos to be meaningful

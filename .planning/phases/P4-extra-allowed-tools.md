@@ -7,12 +7,14 @@
 **Branch:** `feat/p4-extra-allowed-tools`
 
 ## Phase entry preconditions
+
 - CHECKPOINT-P3 exists
 - v1 tag updated to P3 result
 - agentic-ops main is clean (no in-flight allowlist edits from P3)
 - ADR-004 already committed (from P1) and ready for amendment
 
 ## Phase exit postconditions
+
 - `extra_allowed_tools` input present in `review.yml`
 - Allowlist composition logic correctly merges base + extra (separate "Assemble allowlist" GHA step writing to `$GITHUB_OUTPUT`)
 - ADR-004 reflects the implemented input shape
@@ -22,6 +24,7 @@
 ## Tasks
 
 ### P4-T1 — Add extra_allowed_tools input
+
 - **Precondition:** `review.yml` `inputs:` block does not yet contain `extra_allowed_tools`
 - **Action:** Edit the `inputs:` block of `.github/workflows/review.yml` to add the new key
 - **Required fields:** `description` (must include "STATIC ANALYSIS ONLY" and "DO NOT add test runners"), `required: false`, `type: string`, `default: ""`
@@ -29,6 +32,7 @@
 - **Time:** 5 min
 
 ### P4-T2 — Modify allowlist composition
+
 - **Precondition:** P4-T1 complete; existing `claude_args` line uses a hardcoded allowlist string
 - **Action:** Add a separate `Assemble allowlist` step (preserve the YAML snippet below verbatim) that writes the merged value to `$GITHUB_OUTPUT`
 - **Action (cont'd):** Update the `claude-code-action` step's `claude_args` to read `${{ steps.allowlist.outputs.tools }}` instead of inlining the allowlist
@@ -36,6 +40,7 @@
 - **Time:** 30 min (careful YAML/string handling; verify no quoting drift)
 
 ### P4-T3 — Smoke-test allowlist composition locally
+
 - **Precondition:** P4-T2 complete; `act` or equivalent shell harness available
 - **Action:** Exercise the composition shell block with `EXTRA=""` (default path) and `EXTRA='Bash(ruff:*),Bash(mypy:*)'` (caller path); confirm both produce a single comma-joined string with no leading/trailing comma
 - **Action (cont'd):** Confirm whitespace-only `EXTRA` (e.g. `"  "`) is treated as empty by the `${EXTRA//[[:space:]]/}` guard
@@ -43,6 +48,7 @@
 - **Time:** 10 min
 
 ### P4-T4 — Update ADR-004 to reflect final input shape
+
 - **Precondition:** P4-T1 and P4-T2 merged into the working tree
 - **Action:** Edit ADR-004 (committed in P1) to include the actual input name `extra_allowed_tools`, the policy text "STATIC ANALYSIS ONLY", and the explicit forbid-list (test runners, installers, build tools, network fetchers)
 - **Action (cont'd):** Cross-link to SECURITY.md TC-4 and TC-6 so the rationale is traceable
@@ -50,6 +56,7 @@
 - **Time:** 5 min
 
 ### P4-T5 — Open PR against agentic-ops main
+
 - **Precondition:** P4-T1..T4 complete; branch pushed to origin
 - **Action:** Open PR titled `feat(p4): add extra_allowed_tools input for static analysis`
 - **Action (cont'd):** PR body cites ADR-004, links SECURITY.md TC-4/TC-6, and includes the smoke-test transcript from P4-T3
@@ -57,6 +64,7 @@
 - **Time:** 5 min
 
 ### P4-T6 — Wait for CI and CodeRabbit
+
 - **Precondition:** PR open
 - **Action:** Monitor CI (`actionlint`, `shellcheck`, `yamllint`, dispatcher smoke); wait for CodeRabbit walkthrough
 - **Action (cont'd):** Resolve every CodeRabbit conversation (either fix or explicit "won't fix" justification on the thread)
@@ -64,12 +72,14 @@
 - **Time:** 15-25 min depending on CodeRabbit latency
 
 ### P4-T7 — Maintainer merge signal and squash-merge
+
 - **Precondition:** P4-T6 complete; maintainer has issued the merge signal
 - **Action:** Squash-merge with the PR title as the commit subject; delete the feature branch on remote
 - **Postcondition:** PR merged into main; head SHA recorded for tag bump
 - **Time:** 2 min
 
 ### P4-T8 — Bump v1 tag and write CHECKPOINT-P4
+
 - **Precondition:** P4-T7 merge SHA known
 - **Action:** Force-update `v1` to point at the merge commit (`git tag -f v1 <SHA> && git push --force-with-lease origin v1`)
 - **Action (cont'd):** Write `.planning/checkpoints/CHECKPOINT-P4.md` with merge SHA, tag SHA, CI run URL, and CodeRabbit summary
@@ -77,13 +87,15 @@
 - **Time:** 5 min
 
 ### P4-T9 — Open CBM caller-stub PR
+
 - **Precondition:** P4-T8 complete; agentic-ops `v1` now exposes `extra_allowed_tools`
-- **Action:** In `/Users/rookslog/Development/cbm/.github/workflows/claude-review.yml`, add `extra_allowed_tools: 'Bash(ruff:*),Bash(mypy:*),Bash(rg:*)'` under the `with:` block of the reusable-workflow call
+- **Action:** In the cbm repo's `.github/workflows/claude-review.yml` (the local clone path is environment-specific; resolve via `git -C <cbm-repo-path>`), add `extra_allowed_tools: 'Bash(ruff:*),Bash(mypy:*),Bash(rg:*)'` under the `with:` block of the reusable-workflow call
 - **Action (cont'd):** Open PR against `cbm` main; this is HUMAN-GATE-3 (user reviews and merges separately)
 - **Postcondition:** CBM PR open and linked from CHECKPOINT-P4; agentic-ops side requires no further action
 - **Time:** 10 min
 
 ## Phase total estimate
+
 ~1-1.5 hrs.
 
 ## Allowlist composition step
@@ -118,6 +130,7 @@ extra_allowed_tools: 'Bash(ruff:*),Bash(mypy:*),Bash(rg:*)'
 This is a HUMAN-GATE-3 path (CBM PR; user reviews + merges separately).
 
 ## References
+
 - ADR-004 — Allowlist policy (canonical statement of what's acceptable)
 - SECURITY.md TC-4 (allowlist breakage threat class)
 - SECURITY.md TC-6 (test/build execution from PR head — explicitly forbidden in extra_allowed_tools)

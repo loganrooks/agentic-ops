@@ -15,7 +15,7 @@ session-resume protocols, escalation flow with `RESOLVED:` and
 
 ### What the user types
 
-```
+```text
 GO
 ```
 
@@ -68,7 +68,7 @@ After every task, before declaring it complete:
 
 The agent follows this loop mentally on every task:
 
-```
+```text
 while True:
     state = read("auto-execution/STATE.md")
     if state.done:
@@ -107,7 +107,7 @@ while True:
 
 ## Task state machine
 
-```
+```text
 NOT_STARTED → IN_PROGRESS → AWAITING_VERIFICATION → COMPLETE
                 ↓                  ↓
               FAILED            VERIFICATION_FAILED
@@ -175,7 +175,7 @@ The agent self-monitors:
    refs), issues encountered + resolutions.
 2. Update STATE.md `last_session_end`.
 3. Halt with message:
-   ```
+   ```text
    Session ending due to context pressure.
    Last completed task: <id>
    Next task: <id>
@@ -262,7 +262,7 @@ append-then-edit). Schema:
 ```markdown
 # Plan execution state
 
-**Plan file:** /Users/rookslog/.claude/plans/luminous-hopping-lemon.md
+**Plan file:** ~/.claude/plans/<plan-id>.md
 **Plan sha256:** <hash>
 **Started:** <ISO 8601>
 **Last updated:** <ISO 8601>
@@ -295,7 +295,7 @@ append-then-edit). Schema:
 
 Append-only. One line per task execution:
 
-```
+```text
 <ISO 8601>\t<task_id>\t<status>\t<one-line summary>\t<duration_seconds>
 ```
 

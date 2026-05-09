@@ -7,20 +7,23 @@
 **Branch:** `feat/p3-audit-mode`
 
 ## Phase entry preconditions
+
 - CHECKPOINT-P2 exists
 - v1 tag updated to P2 result
 
 ## Phase exit postconditions
+
 - `audit` mode in dispatcher with lens parsing
 - Trigger if-clause widened to allow non-PR issues for audit mode
 - `audit_lens_registry` input added (optional, default = 4 built-in lenses)
 - audit mode-behavior block in prompt
-- ADR-001 (mode taxonomy) updated to reflect final lens names + free-form support
+- ADR-001 (mode taxonomy) lens names verified to match the implementation (no edit; ADRs are immutable per `docs/adr/README.md` and `AGENTS.md`)
 - CI green, **CodeRabbit reviewed + conversations resolved**, PR merged after maintainer signal, v1 tag bumped
 
 ## Tasks
 
 ### P3-T1 — Read existing trigger if-clause
+
 - Open `review.yml` and locate the `if:` clause for the review job.
 - Identify the line range that gates dispatch on `issue_comment` events.
 - Note the current PR-only assumption that audit mode will need to relax.
@@ -28,6 +31,7 @@
 - **Time:** 5 min
 
 ### P3-T2 — Widen trigger if-clause
+
 - Edit `review.yml` if-clause to allow audit on non-PR issues:
   ```yaml
   if: |
@@ -45,6 +49,7 @@
 - **Time:** 5 min
 
 ### P3-T3 — Add audit_lens_registry input
+
 - Add `audit_lens_registry` to `inputs:` per template Appendix A.9.
 - Default: JSON object with 4 lenses (`agential-dx`, `tech-debt`, `forward-compat`, `discipline`) per ADR-001.
 - Mark the input optional (`required: false`) and document the override pattern.
@@ -53,6 +58,7 @@
 - **Time:** 10 min
 
 ### P3-T4 — Add audit case to dispatcher (with target parsing)
+
 - Edit dispatcher case statement:
   ```bash
   "@claude audit"|"@claude audit "*|"@claude audit:"*)
@@ -68,6 +74,7 @@
 - **Time:** 15 min
 
 ### P3-T5 — Update dispatcher smoke test for audit
+
 - Update `test-dispatcher.sh` to assert audit fixtures alongside existing review/explain cases.
 - Add fixtures for built-in lens, free-form question, and bare audit.
 - Assert `mode=audit`, `model=claude-sonnet-4-6`, and expected `audit_target` per fixture.
@@ -76,57 +83,65 @@
 - **Time:** 10 min
 
 ### P3-T6 — Add audit mode-behavior block to prompt
+
 - Insert audit block in prompt template per Appendix A.10 (full template at end of this doc).
 - Block covers: navigation strategy, lens registry consumption, free-form lens construction, output format with metadata footer, multi-comment splitting.
 - Reference `audit_lens_registry` input wiring and the trigger surface (issue OR PR comment) for posting target.
 - **Postcondition:** block present; references audit_lens_registry input correctly; references trigger surface.
 - **Time:** 45 min
 
-### P3-T7 — Update ADR-001 to reflect audit lens names
-- Edit ADR-001 (committed in P1) so final lens IDs match: `agential-dx`, `tech-debt`, `forward-compat`, `discipline`.
-- ADRs are normally superseded not edited, but this is a within-execution refinement during the same plan; acceptable per ADR README's "currently empty" disclaimer.
-- Document the edit in the commit message; confirm names match dispatcher case and prompt block.
-- **Postcondition:** ADR-001 lens names match dispatcher and prompt.
+### P3-T7 — Verify ADR-001 lens names match implementation
+
+- Read ADR-001 (committed in P1) and confirm the documented lens names — `agential-dx`, `tech-debt`, `forward-compat`, `discipline` — match the dispatcher case statement and the audit prompt block exactly.
+- **Do NOT edit ADR-001.** ADRs are immutable per `docs/adr/README.md` and the hard rules in `AGENTS.md`; they are superseded by a new ADR if a decision changes.
+- If a mismatch is found and the implementation cannot be aligned to the ADR (e.g., a lens name needs to change for a substantive reason), STOP and open a separate PR that supersedes ADR-001 with a new ADR (ADR-006-...). Do not edit ADR-001 in place.
+- **Postcondition:** ADR-001 lens names confirmed to match dispatcher and prompt; no edit to ADR-001.
 - **Time:** 5 min
 
 ### P3-T8 — Local validation
+
 - Run `actionlint`, `shellcheck`, and the dispatcher smoke test against the working tree.
 - Re-run pre-commit hooks for workflow changes; confirm no untracked artifacts.
 - **Postcondition:** local validation green; ready to push.
 - **Time:** 10 min
 
 ### P3-T9 — Open PR
+
 - Push `feat/p3-audit-mode`; open PR titled `feat(p3): add audit mode (L1, lens-based whole-codebase)`.
 - PR body cites ADR-001, Appendix A.9, A.10; link CHECKPOINT-P2; add planning labels.
 - **Postcondition:** PR open against `main`.
 - **Time:** 10 min
 
 ### P3-T10 — Wait for CI + CodeRabbit
+
 - Watch CI to green; let CodeRabbit complete its automated review.
 - Resolve CodeRabbit conversations on substance (do not silently dismiss); re-run CI on each substantive change.
 - **Postcondition:** CI green, CodeRabbit conversations resolved.
 - **Time:** variable; budget 30-60 min.
 
 ### P3-T11 — Merge after maintainer signal
+
 - Wait for explicit maintainer approval; use a squash merge consistent with prior phases.
 - Confirm merge lands on `main` cleanly.
 - **Postcondition:** PR merged.
 - **Time:** 5 min
 
 ### P3-T12 — Bump v1 tag and write CHECKPOINT-P3
+
 - Move floating `v1` tag to the new merge commit on `main`.
 - Write `CHECKPOINT-P3.md` (artifacts, decisions, follow-ups); push tag and checkpoint.
 - **Postcondition:** v1 points at P3 merge commit; CHECKPOINT-P3 exists.
 - **Time:** 10 min.
 
 ## Phase total estimate
+
 2-3 hours, 12 tasks, ~1 session.
 
 ## Audit mode-behavior prompt template
 
 Full text inserted by P3-T6. Critical content artifact — review carefully before merge.
 
-```
+```text
 * audit: whole-codebase review against a question or lens. REQUIRES a
   target: either a built-in lens or a free-form question.
 
@@ -231,7 +246,7 @@ Full text inserted by P3-T6. Critical content artifact — review carefully befo
         Mode: audit | Lens: <id-or-"free-form"> | Model: <model>
         Files read: <n> | Directories traversed: <n>
         Runtime: <sec>s | Commit SHA: <sha> | Run: <url>
-        ```
+        ```text
     - Findings sectioned by severity (Critical/Warning/Suggestion).
     - Each finding: title, evidence (file:line citations), reasoning,
       recommended action.
@@ -255,7 +270,8 @@ Full text inserted by P3-T6. Critical content artifact — review carefully befo
 ```
 
 ## References
-- ADR-001 — Mode taxonomy (defines audit + lens registry; updated in P3-T7)
+
+- ADR-001 — Mode taxonomy (defines audit + lens registry; verified unchanged in P3-T7 per ADR-immutability rule)
 - ADR-005 — Audit output format (single comment, multi-comment split)
 - `phases/EMPIRICAL-GATE.md` — runs audit on CBM main after P3+P4 merge
 - `phases/P6-audit-mode-l3.md` — conditional follow-up if signal demands fan-out
