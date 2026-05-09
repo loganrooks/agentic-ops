@@ -1,0 +1,20 @@
+# yamllint config for agentic-ops
+# Tuned for GitHub Actions workflows: relax line length, allow `on:` as a
+# key (yamllint flags it as a truthy value otherwise), allow missing
+# document-start marker.
+extends: default
+
+rules:
+  line-length:
+    max: 200
+    level: warning
+  truthy:
+    allowed-values: ['true', 'false']
+    check-keys: false
+  document-start: disable
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: disable
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
