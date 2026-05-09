@@ -30,7 +30,7 @@
 ### P0-T2 — Snapshot the plan
 
 - **Precondition:** P0-T1 complete
-- **Action:** `cp ~/.claude/plans/luminous-hopping-lemon.md .planning/auto-execution/PLAN-snapshot.md`
+- **Action:** `cp ~/.claude/plans/<plan-id>.md .planning/auto-execution/PLAN-snapshot.md` (use the `<plan-id>` recorded in `STATE.md`'s `Plan file` field)
 - **Postcondition:** snapshot exists and is byte-identical to source (verify with `sha256sum`)
 - **Retry:** 3x then escalate
 - **Estimated time:** seconds

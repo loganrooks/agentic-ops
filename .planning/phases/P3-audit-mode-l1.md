@@ -43,6 +43,7 @@
       startsWith(github.event.comment.body, '@claude audit')
     )
   ```
+
 - Run `actionlint` on the workflow to confirm the YAML still parses.
 - Confirm the widened clause still excludes non-author-associated commenters and that PR comments continue to satisfy it unchanged.
 - **Postcondition:** new if-clause valid YAML; actionlint passes.
@@ -68,6 +69,7 @@
     echo "audit_target=$audit_target" >> "$GITHUB_OUTPUT"
     ;;
   ```
+
 - Cover three trigger shapes: `@claude audit:agential-dx`, `@claude audit Are we ready?`, `@claude audit` (bare).
 - Ensure `audit_target` is emitted on `$GITHUB_OUTPUT` and bare form does not crash the parser (empty target allowed).
 - **Postcondition:** new case present; smoke test fixtures cover all three shapes.
@@ -141,7 +143,7 @@
 
 Full text inserted by P3-T6. Critical content artifact — review carefully before merge.
 
-```text
+````text
 * audit: whole-codebase review against a question or lens. REQUIRES a
   target: either a built-in lens or a free-form question.
 
@@ -241,12 +243,14 @@ Full text inserted by P3-T6. Critical content artifact — review carefully befo
       if recurrent."
 
   Output format:
-    - Always include metadata footer:
-        ```
+    - Always include metadata footer (illustrative — the agent
+      outputs this verbatim wrapped in triple-backticks in the
+      comment):
+
         Mode: audit | Lens: <id-or-"free-form"> | Model: <model>
         Files read: <n> | Directories traversed: <n>
         Runtime: <sec>s | Commit SHA: <sha> | Run: <url>
-        ```text
+
     - Findings sectioned by severity (Critical/Warning/Suggestion).
     - Each finding: title, evidence (file:line citations), reasoning,
       recommended action.
@@ -267,7 +271,7 @@ Full text inserted by P3-T6. Critical content artifact — review carefully befo
     - Max comment chunks: 5
     - Hard timeout: 60 min (workflow-level; override via
       timeout_minutes input if caller wants longer)
-```
+````
 
 ## References
 

@@ -47,6 +47,7 @@
   ```bash
   "@claude survey"|"@claude survey "*) mode=survey; model=claude-sonnet-4-6 ;;
   ```
+
   Insert before the catch-all `*)` line.
 - **Postcondition:** New line present; immediately followed by existing `*)` line
 - **Estimated time:** 2 min
@@ -117,7 +118,7 @@
 
 The full text inserted by P2-T4. This is the critical content artifact of the phase — review carefully before merge.
 
-```text
+````text
 * survey: spatial-decomposition review for large PRs (>50 files or
   >5K changed lines). Single-agent path (L1) — Phase 1-4 sequential.
 
@@ -170,12 +171,13 @@ The full text inserted by P2-T4. This is the critical content artifact of the ph
   see existing CodeRabbit / Codex / Claude findings. Dedupe yours
   against theirs (skip findings already raised; note dupes briefly).
   Order findings: P1 first, then P2, then P3. Within each priority,
-  group by zone. Prepend a metadata footer:
-      ```
+  group by zone. Prepend a metadata footer (illustrative — the agent
+  outputs this verbatim wrapped in triple-backticks in the comment):
+
       Mode: survey | Model: claude-sonnet-4-6
       Zones: <count> | Files read: <count>
       Runtime: <approx-seconds>s | Run: <run_url>
-      ```text
+
   Post ONE comment via the wrapper script:
       ./central/.github/scripts/post-claude-review.sh <pr> <<'EOF'
       <body>
@@ -187,7 +189,7 @@ The full text inserted by P2-T4. This is the critical content artifact of the ph
     - Max files read in Phase 2: 6 per zone × 8 zones = 48 max
     - Max files read in Phase 3: 6 (AGENTS.md + ADRs)
     - Hard timeout: 45 min (workflow-level)
-```
+````
 
 ## References
 

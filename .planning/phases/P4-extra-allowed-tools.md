@@ -11,13 +11,13 @@
 - CHECKPOINT-P3 exists
 - v1 tag updated to P3 result
 - agentic-ops main is clean (no in-flight allowlist edits from P3)
-- ADR-004 already committed (from P1) and ready for amendment
+- ADR-004 already committed (from P1); this phase implements its policy without editing it
 
 ## Phase exit postconditions
 
 - `extra_allowed_tools` input present in `review.yml`
 - Allowlist composition logic correctly merges base + extra (separate "Assemble allowlist" GHA step writing to `$GITHUB_OUTPUT`)
-- ADR-004 reflects the implemented input shape
+- ADR-004 contents verified to match the implemented input shape (no edit; ADRs are immutable per `docs/adr/README.md` and `AGENTS.md`)
 - CI green, **CodeRabbit reviewed + conversations resolved**, PR merged after maintainer signal, v1 tag bumped
 - Separate PR opened against CBM caller stub adding `extra_allowed_tools: 'Bash(ruff:*),Bash(mypy:*),Bash(rg:*)'`
 
@@ -47,12 +47,12 @@
 - **Postcondition:** local run captures both branches; output matches expected `tools=` line
 - **Time:** 10 min
 
-### P4-T4 — Update ADR-004 to reflect final input shape
+### P4-T4 — Verify ADR-004 matches the implemented input shape
 
-- **Precondition:** P4-T1 and P4-T2 merged into the working tree
-- **Action:** Edit ADR-004 (committed in P1) to include the actual input name `extra_allowed_tools`, the policy text "STATIC ANALYSIS ONLY", and the explicit forbid-list (test runners, installers, build tools, network fetchers)
-- **Action (cont'd):** Cross-link to SECURITY.md TC-4 and TC-6 so the rationale is traceable
-- **Postcondition:** ADR-004 references match implementation; no stale placeholder names remain
+- **Precondition:** P4-T1 and P4-T2 staged in the working tree
+- **Action:** Read ADR-004 (committed in P1) and confirm it already documents the input name `extra_allowed_tools`, the "STATIC ANALYSIS ONLY" policy, and the forbid-list (test runners, installers, build tools, network fetchers). Confirm cross-references to SECURITY.md TC-4 and TC-6 are present.
+- **Do NOT edit ADR-004.** ADRs are immutable per `docs/adr/README.md` and the hard rules in `AGENTS.md`. If a substantive deviation between ADR-004 and the implementation is found and the implementation cannot be aligned to the ADR (e.g., the input name needs to differ), STOP and open a separate PR that supersedes ADR-004 with a new ADR. Do not edit ADR-004 in place.
+- **Postcondition:** ADR-004 contents confirmed to match implementation; no edit to ADR-004.
 - **Time:** 5 min
 
 ### P4-T5 — Open PR against agentic-ops main
@@ -82,7 +82,7 @@
 
 - **Precondition:** P4-T7 merge SHA known
 - **Action:** Force-update `v1` to point at the merge commit (`git tag -f v1 <SHA> && git push --force-with-lease origin v1`)
-- **Action (cont'd):** Write `.planning/checkpoints/CHECKPOINT-P4.md` with merge SHA, tag SHA, CI run URL, and CodeRabbit summary
+- **Action (cont'd):** Write `.planning/auto-execution/checkpoints/CHECKPOINT-P4.md` with merge SHA, tag SHA, CI run URL, and CodeRabbit summary
 - **Postcondition:** `v1` resolves to the P4 merge; checkpoint file committed on main
 - **Time:** 5 min
 
@@ -116,6 +116,7 @@
 ```
 
 Then in the action step:
+
 ```yaml
 claude_args: '--model ${{ steps.mode.outputs.model }} --add-dir pr-head --allowedTools "${{ steps.allowlist.outputs.tools }}"'
 ```
@@ -123,6 +124,7 @@ claude_args: '--model ${{ steps.mode.outputs.model }} --add-dir pr-head --allowe
 ## CBM caller stub update (separate PR)
 
 After agentic-ops P4 merges and v1 tag bumps, open a PR in cbm to add:
+
 ```yaml
 extra_allowed_tools: 'Bash(ruff:*),Bash(mypy:*),Bash(rg:*)'
 ```

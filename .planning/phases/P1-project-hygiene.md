@@ -27,7 +27,7 @@
 
 - **Precondition:** `agentic-ops/LICENSE` does NOT exist
 - **Action:** Write Apache-2.0 license text (canonical, full text from Appendix A.1)
-- **Postcondition:** file exists; first line is `                                 Apache License`; contains "Version 2.0, January 2004"; size > 10000 bytes
+- **Postcondition:** file exists; the canonical Apache License header is present (the first non-blank line is the centred string `Apache License` per the canonical text); contains "Version 2.0, January 2004"; size > 10000 bytes
 - **Retry:** 3
 - **Time:** 1 min
 
