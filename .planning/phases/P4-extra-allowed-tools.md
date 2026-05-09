@@ -82,8 +82,9 @@
 
 - **Precondition:** P4-T7 merge SHA known
 - **Action:** Force-update `v1` to point at the merge commit (`git tag -f v1 <SHA> && git push --force-with-lease origin v1`)
-- **Action (cont'd):** Write `.planning/auto-execution/checkpoints/CHECKPOINT-P4.md` with merge SHA, tag SHA, CI run URL, and CodeRabbit summary
-- **Postcondition:** `v1` resolves to the P4 merge; checkpoint file committed on main
+- **Action (cont'd):** Write `.planning/auto-execution/checkpoints/CHECKPOINT-P4.md` (per-phase detail file) with merge SHA, tag SHA, CI run URL, CodeRabbit findings count, artifacts list, and any deviations from plan
+- **Action (cont'd):** Append a CHECKPOINT-P4 summary entry to `.planning/auto-execution/CHECKPOINTS.md` (the aggregate index) referencing the detail file; pattern matches CHECKPOINT-P0/P1 already on main and the P2/P3 entries from earlier phases
+- **Postcondition:** `v1` resolves to the P4 merge; both CHECKPOINT-P4.md detail file and CHECKPOINTS.md aggregate entry exist
 - **Time:** 5 min
 
 ### P4-T9 — Open CBM caller-stub PR

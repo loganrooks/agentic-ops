@@ -13,10 +13,11 @@
 
 ## Phase exit postconditions
 
-- `audit` mode in dispatcher with lens parsing
+- `audit` mode in dispatcher with lens parsing (bare `@claude audit` accepted; defaults to audit:agential-dx with header note)
 - Trigger if-clause widened to allow non-PR issues for audit mode
 - `audit_lens_registry` input added (optional, default = 4 built-in lenses)
 - audit mode-behavior block in prompt
+- `post-claude-review.sh` wrapper extended (or a parallel `post-claude-review-issue.sh` introduced) to handle the `gh issue comment` path for non-PR issue triggers, with the same integer-validated argument + stdin-only body discipline. The two gh subcommands (`gh pr comment`, `gh issue comment`) are distinct; the wrapper(s) must dispatch correctly based on the event payload.
 - ADR-001 (mode taxonomy) lens names verified to match the implementation (no edit; ADRs are immutable per `docs/adr/README.md` and `AGENTS.md`)
 - CI green, **CodeRabbit reviewed + conversations resolved**, PR merged after maintainer signal, v1 tag bumped
 
@@ -133,8 +134,9 @@
 ### P3-T12 — Bump v1 tag and write CHECKPOINT-P3
 
 - Move floating `v1` tag to the new merge commit on `main`.
-- Write `CHECKPOINT-P3.md` (artifacts, decisions, follow-ups); push tag and checkpoint.
-- **Postcondition:** v1 points at P3 merge commit; CHECKPOINT-P3 exists.
+- Write `.planning/auto-execution/checkpoints/CHECKPOINT-P3.md` (per-phase detail) with merge SHA, tag SHA, artifacts list, decisions, CodeRabbit findings count, follow-ups.
+- Append a CHECKPOINT-P3 summary entry to `.planning/auto-execution/CHECKPOINTS.md` (aggregate index) referencing the detail file.
+- **Postcondition:** v1 points at P3 merge commit; both CHECKPOINT-P3.md detail and CHECKPOINTS.md aggregate entry exist.
 - **Time:** 10 min.
 
 ## Phase total estimate
@@ -146,14 +148,20 @@
 Full text inserted by P3-T6. Critical content artifact — review carefully before merge.
 
 ````text
-* audit: whole-codebase review against a question or lens. REQUIRES a
-  target: either a built-in lens or a free-form question.
+* audit: whole-codebase review against a question or lens. A target
+  is recommended but not required — bare `@claude audit` is accepted
+  by the dispatcher and runs the default lens (audit:agential-dx)
+  with a note in the report header explaining the implicit choice
+  and suggesting explicit invocation for future runs.
 
   Lens parsing (orchestrator):
     - audit_target was extracted from the trigger comment by the
       dispatcher. Read it from steps.mode.outputs.audit_target.
-    - If audit_target starts with a known lens-id (agential-dx,
-      tech-debt, forward-compat, discipline) → built-in path
+    - If audit_target is empty (bare `@claude audit`) → use the
+      default built-in lens audit:agential-dx and note the
+      implicit-default in the output header.
+    - Else if audit_target starts with a known lens-id (agential-dx,
+      tech-debt, forward-compat, discipline) → built-in path.
     - Otherwise → free-form path; treat the entire string as the
       question.
 
@@ -264,9 +272,16 @@ Full text inserted by P3-T6. Critical content artifact — review carefully befo
         - Wrapper supports multiple invocations within one job.
 
   Posting target:
-    - PR comment trigger → post to PR
-    - Issue comment trigger → post to issue (gh pr comment also
-      works for issues; verify by checking github.event.issue.number)
+    - PR comment trigger (github.event.issue.pull_request != null)
+      → post to PR via the wrapper script (which forwards to
+      `gh pr comment <pr-number> --body-file -`).
+    - Issue comment trigger (github.event.issue.pull_request == null)
+      → post to issue via `gh issue comment <issue-number> --body-file -`.
+      The wrapper script's allowlist entry must include the
+      issue-comment subcommand for this path. NOTE: `gh pr comment`
+      and `gh issue comment` are different gh subcommands; do not
+      conflate them. The dispatcher selects the correct one based
+      on the event payload.
 
   Budget caps:
     - Max files read total: 18 (Phase 1: 6, Phase 2: 12)

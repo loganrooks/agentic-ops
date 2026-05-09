@@ -108,7 +108,7 @@
 
 - Re-run `@claude survey` on CBM PR #1 post-merge; confirm the 3-job structure activates above threshold.
 - Verify the synthesis comment posts with expected dedupe and cross-zone integrity notes.
-- Only after that real-traffic run succeeds, write `CHECKPOINT-P5.md`.
+- Only after that real-traffic run succeeds, write the dual checkpoint: per-phase detail at `.planning/auto-execution/checkpoints/CHECKPOINT-P5.md`, and append a summary entry to `.planning/auto-execution/CHECKPOINTS.md` (aggregate index).
 - Time: ~30 min.
 
 ## Phase total estimate

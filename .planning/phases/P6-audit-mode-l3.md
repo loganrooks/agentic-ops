@@ -111,7 +111,8 @@ Structurally similar to P5 (T1..T12). Differences from P5:
 ### P6-T12 — Tag, checkpoint, end-to-end validate
 
 - Bump v1 tag (backward-compatible feature for callers)
-- Write CHECKPOINT-P6 with model versions, costs, and metric deltas
+- Write `.planning/auto-execution/checkpoints/CHECKPOINT-P6.md` (per-phase detail) with model versions, costs, metric deltas, artifacts list, CodeRabbit findings count
+- Append a CHECKPOINT-P6 summary entry to `.planning/auto-execution/CHECKPOINTS.md` (aggregate index) referencing the detail file
 - Run `@claude audit:tech-debt` on CBM main; record numbers for any L3-vs-L1 retrospective
 
 ## Phase total estimate

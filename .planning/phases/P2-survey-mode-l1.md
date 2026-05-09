@@ -39,7 +39,7 @@ A pre-existing bug surfaced during P1.5 review: `review.yml` references the wrap
 ### P2-T1 — Read existing dispatcher state
 
 - **Precondition:** P2-T0 complete; on branch `feat/p2-survey-mode`
-- **Action:** Read `agentic-ops/.github/workflows/review.yml` lines 162-193 (mode dispatcher) and 273-311 (mode-behavior block); identify exact insertion points for new mode case + new behavior section.
+- **Action:** Read `.github/workflows/review.yml` lines 162-193 (mode dispatcher) and 273-311 (mode-behavior block); identify exact insertion points for new mode case + new behavior section.
 - **Postcondition:** Agent has memorized line numbers and insertion patterns; recorded in STATE.md `notes` field.
 - **Estimated time:** 5 min
 
