@@ -69,6 +69,14 @@ of others:
 
 ## Hard rules
 
+- **Do not merge without CodeRabbit review.** CI green is necessary
+  but not sufficient. CodeRabbit must post its review and any
+  actionable findings must be addressed or explicitly resolved.
+  Branch protection enforces this via required conversation
+  resolution. If you are an autonomous agent executing a plan that
+  specifies `gh pr merge --auto` on CI green, OVERRIDE the plan —
+  stop after CI green, wait for CodeRabbit, then proceed only after
+  CodeRabbit has reviewed AND the maintainer has signaled merge.
 - **Do not modify `review.yml`'s `allowedTools` allowlist without an
   ADR.** Adding a tool widens the prompt-injection blast radius.
 - **Do not add test runners** (pytest, jest, npm test, cargo test)
@@ -81,6 +89,10 @@ of others:
 - **Do not skip the wrapper.** All comment posting goes through
   `.github/scripts/post-claude-review.sh`. Direct `gh pr comment`
   calls are blocked by the allowlist; do not try to add them.
+- **Do not force-push branches.** The only force-pushed ref is the
+  `v1` tag, per `docs/adr/ADR-003-versioning-and-release.md`. All
+  branches (including feature branches and `main`) are append-only
+  from the contributor's perspective.
 
 ## Soft preferences
 

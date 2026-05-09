@@ -1,0 +1,114 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Repo-specific config for agentic-ops. Inherits from loganrooks/coderabbit
+# (central). MUST keep `inheritance: true` for that chain to apply.
+inheritance: true
+
+reviews:
+  # `agentic-ops` is the centralized review substrate; the surfaces below are
+  # the highest-leverage attack surfaces. Path-specific instructions tell
+  # CodeRabbit what to scrutinize on this repo specifically.
+  path_instructions:
+    - path: '.github/workflows/review.yml'
+      instructions: |-
+        This is the kernel reusable workflow. Multiple consumer repos call it
+        via @v1. Bugs here propagate transparently. Highest-risk surfaces:
+
+        * The mode dispatcher case statement. New cases MUST use the safer
+          `"@claude X"|"@claude X "*` pattern (matches bare command and
+          command-with-space, rejects prefix-only matches like
+          `@claude reviewing` or `@claude gatesomething`). Flag any new
+          case that uses bare `"@claude X"*` (which would silently match
+          `@claude Xanything`).
+        * `--allowedTools` allowlist composition. Any new entry must align
+          with `docs/adr/ADR-004-allowlist-policy.md`: STATIC ANALYSIS ONLY.
+          Flag entries that smell like test runners (pytest, jest, npm test),
+          installers (pip install, npm install, apt), build tools (make,
+          cargo build, tsc emit), or network fetchers (curl, wget).
+        * The trigger `if:` clause. Trusted-actor gating
+          (OWNER/MEMBER/COLLABORATOR) is non-negotiable. Flag any change
+          that loosens it.
+        * Heredoc discipline in prompts. The wrapper-script invocation must
+          use a SINGLE-QUOTED heredoc (`<<'EOF'`) — single quotes prevent
+          bash from expanding `$(...)`, `$var`, or backticks in
+          PR-derived content. Flag any unquoted heredoc or any path that
+          would let the body be expanded before the wrapper sees it.
+        * Pinned action SHAs. `uses:` references must pin to commit SHA
+          (not floating tags). Flag any `@vN`-style reference for
+          third-party actions.
+        * Concurrency group + timeouts. Any new job needs a concurrency
+          group keyed appropriately and a `timeout-minutes` cap.
+
+    - path: '.github/scripts/post-claude-review.sh'
+      instructions: |-
+        The wrapper that closes Comment-and-Control attacks (SECURITY.md
+        TC-1, TC-2). The shape is non-negotiable:
+
+        * Accepts ONE positional argument: an integer-validated PR number.
+        * Reads the comment body from STDIN ONLY (forwarded as `--body-file -`).
+        * Refuses `--body-file <path>`, `--body "..."`, and any other gh flag.
+
+        Flag any change that adds a flag, accepts a body argument, or
+        widens the input shape. The `set -euo pipefail` and integer regex
+        guards are load-bearing — flag their removal or weakening.
+
+    - path: '.github/scripts/test-dispatcher.sh'
+      instructions: |-
+        Smoke test that mirrors the dispatcher in review.yml. Failure modes:
+
+        * Missing fixture for a new mode added to review.yml — the test
+          re-implements the case statement and MUST stay in sync.
+        * Fixtures that assert prefix-only matches as positive (e.g.,
+          `@claude reviewing` → `review`) — those would mask a security
+          regression in the dispatcher.
+        * Negative cases (incidental mentions, bare `@claude`, empty
+          body) being relaxed — those guards exist on purpose.
+
+    - path: 'docs/adr/ADR-*.md'
+      instructions: |-
+        ADRs are immutable once accepted (per docs/adr/README.md format).
+        New ADR PRs are fine; modifications to existing ADRs require
+        either (a) a Status: superseded by ADR-NNN line + a new ADR, or
+        (b) explicit justification in the PR body. Flag silent edits to
+        accepted ADRs.
+
+    - path: '.planning/phases/P*.md'
+      instructions: |-
+        Per-phase planning docs for the autonomous build initiative.
+        Changes to these docs after a phase has merged should be rare
+        and explicit (they are historical artifacts, not living plans).
+        Flag retroactive task additions or removals to a phase whose
+        checkpoint already exists in .planning/auto-execution/checkpoints/.
+        Adding new phases via insertion is fine.
+
+    - path: '.planning/auto-execution/**'
+      instructions: |-
+        Autonomous execution state files. They mutate during plan
+        execution; CodeRabbit should generally NOT block on style or
+        prose quality here. Flag only:
+        * STATE.md inconsistencies (e.g., current_phase claims P3 but
+          CHECKPOINTS.md has no P2 entry)
+        * SESSION-LOG.md or CHECKPOINTS.md with non-monotonic timestamps
+        * Plan-sha mismatch between STATE.md and PLAN-snapshot.md
+
+    - path: '.github/workflows/ci.yml'
+      instructions: |-
+        Self-CI for agentic-ops. Flag:
+        * Removed lint steps (actionlint, shellcheck, yamllint, smoke test)
+        * Floating-tag references on third-party actions
+        * Missing `timeout-minutes` on jobs
+        * `permissions:` block that grants more than `contents: read`
+          (this workflow has no need for write scopes)
+
+    - path: 'AGENTS.md'
+      instructions: |-
+        Operative-discipline doc. Flag:
+        * Removal or softening of any of the 5 commitments
+        * Removal or softening of any hard rule
+        * Edits that contradict a referenced ADR
+
+    - path: 'SECURITY.md'
+      instructions: |-
+        Threat model. Flag:
+        * Mitigation language softened from "MUST" / non-negotiable to
+          aspirational without an accompanying ADR
+        * Removal of a threat class without explicit justification
