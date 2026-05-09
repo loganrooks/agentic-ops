@@ -1,0 +1,10 @@
+# Autonomous-execution runtime state. These files are written by the agent
+# during plan execution and tracked locally only. The final P9 archive phase
+# uses `git add -f` to commit a frozen snapshot to the archive directory.
+.planning/auto-execution/
+
+# OS / editor noise
+.DS_Store
+*~
+.vscode/
+.idea/

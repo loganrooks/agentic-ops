@@ -31,9 +31,42 @@ velocity. This document captures the contribution flow.
    - `bash .github/scripts/test-dispatcher.sh`
 4. Commit with conventional-commit-style messages
    (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`).
-5. Open a PR against `main`. CI must be green to merge.
-6. Merge via squash (auto-merge enabled — the PR auto-merges once
-   CI passes and any required reviews approve).
+5. Open a PR against `main`.
+6. **Wait for CI green AND CodeRabbit review.** CI green is necessary
+   but not sufficient. CodeRabbit must post its review (a `COMMENTED`
+   review is its normal output) and any actionable findings must be
+   either addressed by a follow-up commit or explicitly explained in
+   a reply that resolves the conversation thread.
+7. **Resolve all CodeRabbit conversations** before merge. Branch
+   protection on `main` requires conversation resolution — unresolved
+   threads block the merge button. This is the technical enforcement
+   of the discipline.
+8. Merge via squash. Auto-merge with `--auto` is acceptable AFTER
+   CodeRabbit has reviewed and conversations are resolved (auto-merge
+   then waits only on remaining required signals). Do NOT use
+   `--auto` immediately on PR open — it bypasses CodeRabbit review.
+
+## Review discipline
+
+The substrate is security-sensitive (workflows, dispatcher, allowlist
+composition). CI green covers syntactic and structural correctness;
+CodeRabbit covers semantic patterns CI cannot detect — vocabulary
+drift, contract mismatches, AI-failure-mode patterns, allowlist
+policy drift. Both signals are required.
+
+A typical PR lifecycle:
+
+1. Open PR → CI runs (`lint`, `dispatcher-smoke`)
+2. CodeRabbit reviews the diff (usually within 2–5 min of open)
+3. Author addresses findings (push fixup commits) or explains why a
+   finding doesn't apply (resolve the conversation with a reply)
+4. Maintainer reviews — confirms findings addressed, approves merge
+   intent
+5. Merge (squash, with `--auto` or direct, after gates clear)
+
+If CodeRabbit doesn't review within ~10 min of PR open (rare,
+usually a queue or config issue), comment `@coderabbitai review` to
+trigger explicitly. Do not merge without CodeRabbit's pass.
 
 ## Architecture decision records
 
