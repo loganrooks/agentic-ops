@@ -1,0 +1,344 @@
+name: Claude PR Review (centralized)
+
+# Reusable workflow for AI-led PR review.
+#
+# Centralized concerns (owned here):
+#   * trusted-actor + trigger-phrase gate
+#   * mode dispatcher (review / quick / deep / gates / opus)
+#   * claude-code-action invocation + allowedTools allowlist
+#   * the post-comment wrapper script (closes Comment-and-Control)
+#   * concurrency group, timeout, permissions
+#
+# Per-repo concerns (passed via inputs by the caller):
+#   * which modes are enabled for this repo (enabled_modes)
+#   * priority paths in 'review' mode (review_focus_paths)
+#   * file matchers in 'gates' mode (gates_paths)
+#   * AGENTS.md location and human-friendly repo label
+#
+# Consumer caller stub (~15 lines):
+#
+#   on:
+#     issue_comment:
+#       types: [created]
+#   permissions:
+#     contents: read
+#     pull-requests: write
+#     issues: write
+#     id-token: write
+#   jobs:
+#     review:
+#       uses: loganrooks/agentic-ops/.github/workflows/review.yml@v1
+#       with:
+#         enabled_modes: '["review","quick","deep","opus"]'
+#         review_focus_paths: |
+#           src/important.py
+#       secrets:
+#         claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+on:
+  workflow_call:
+    inputs:
+      enabled_modes:
+        description: |-
+          JSON array of mode names this repo supports, drawn from the
+          central registry: review, quick, deep, gates, opus. Modes not
+          listed are rejected at dispatch with an explanatory error.
+        required: false
+        type: string
+        default: '["review","quick","deep","opus"]'
+      review_focus_paths:
+        description: |-
+          Newline-separated paths or globs to prioritize in 'review' mode.
+          Empty (default) means no priority — the diff is treated uniformly.
+        required: false
+        type: string
+        default: ""
+      gates_paths:
+        description: |-
+          Newline-separated paths or globs for 'gates' mode. Required if
+          'gates' is in enabled_modes. If empty, 'gates' mode posts a
+          single comment explaining it is not configured for this repo.
+        required: false
+        type: string
+        default: ""
+      agents_md_path:
+        description: |-
+          Path to AGENTS.md within pr-head/. Default 'AGENTS.md', i.e.
+          'pr-head/AGENTS.md'. Used by Claude as the operative discipline
+          source; missing file is tolerated (Claude proceeds without it).
+        required: false
+        type: string
+        default: "AGENTS.md"
+      repo_label:
+        description: |-
+          Human-friendly repo name used in the prompt's framing line.
+          Default: github.event.repository.name (the consumer's repo).
+        required: false
+        type: string
+        default: ""
+      timeout_minutes:
+        description: "Job timeout in minutes. Default 30."
+        required: false
+        type: number
+        default: 30
+    secrets:
+      claude_code_oauth_token:
+        description: |-
+          Anthropic plan-auth token (CLAUDE_CODE_OAUTH_TOKEN). Required;
+          this workflow does not support API-key auth.
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+concurrency:
+  group: agentic-ops-review-${{ github.repository }}-pr-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Trusted-actor + trigger-phrase gate. This is the central
+    # enforcement point. Callers SHOULD also gate at their job level
+    # (cheap short-circuit before invoking workflow_call), but security
+    # does not depend on that — this gate is the contract.
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '@claude ') &&
+      contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    steps:
+      # Caller's default branch at $GITHUB_WORKSPACE root. The Claude
+      # action treats $GITHUB_WORKSPACE as a trusted git tree; checking
+      # the PR head out at the root would be the antipattern called out
+      # in the action's security docs (untrusted ref + privileged context).
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          fetch-depth: 1
+
+      # Determine which ref of agentic-ops to check out as 'central/'.
+      # github.workflow_ref looks like one of:
+      #   loganrooks/agentic-ops/.github/workflows/review.yml@refs/tags/v1
+      #   loganrooks/agentic-ops/.github/workflows/review.yml@refs/heads/main
+      #   loganrooks/agentic-ops/.github/workflows/review.yml@<full sha>
+      # We checkout the same ref the caller pinned, so the wrapper script
+      # version matches the workflow version exactly.
+      - name: Determine central ref
+        id: central_ref
+        env:
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: |
+          set -euo pipefail
+          ref="${WORKFLOW_REF#*@}"
+          if [[ -z "$ref" || "$ref" == "$WORKFLOW_REF" ]]; then
+            echo "error: could not extract ref from workflow_ref=$WORKFLOW_REF" >&2
+            exit 1
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "central ref resolved to: $ref"
+
+      # Central tooling (this repo: wrapper script, future shared infra)
+      # at central/. Pinned to the same ref the caller used.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          repository: loganrooks/agentic-ops
+          ref: ${{ steps.central_ref.outputs.ref }}
+          path: central
+          fetch-depth: 1
+
+      # PR head — the surface being reviewed. Goes into pr-head/ so the
+      # action's working tree at root stays trusted; passed to Claude
+      # via --add-dir below.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+          path: pr-head
+          fetch-depth: 50
+
+      - name: Determine review mode
+        id: mode
+        env:
+          BODY: ${{ github.event.comment.body }}
+          ENABLED_MODES: ${{ inputs.enabled_modes }}
+        run: |
+          set -euo pipefail
+          # Extract first non-empty trimmed line. Strict first-line match
+          # (vs anywhere-in-body) avoids firing on incidental mentions in
+          # discussion threads.
+          cmd="$(printf '%s\n' "$BODY" | awk 'NF { sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); print; exit }')"
+          # Patterns require either exact match ('@claude X') or trailing
+          # whitespace ('@claude X ...'); this prevents '@claude reviewing'
+          # or '@claude gatesomething' from matching review/gates by prefix.
+          case "$cmd" in
+            "@claude opus"|"@claude opus "*)     mode=opus;   model=claude-opus-4-7   ;;
+            "@claude deep"|"@claude deep "*)     mode=deep;   model=claude-sonnet-4-6 ;;
+            "@claude quick"|"@claude quick "*)   mode=quick;  model=claude-sonnet-4-6 ;;
+            "@claude gates"|"@claude gates "*)   mode=gates;  model=claude-sonnet-4-6 ;;
+            "@claude review"|"@claude review "*) mode=review; model=claude-sonnet-4-6 ;;
+            *) echo "First line did not match an allowed trigger phrase: '$cmd'" >&2; exit 1 ;;
+          esac
+          # Validate against this consumer's enabled_modes JSON array.
+          if ! echo "$ENABLED_MODES" | jq -e --arg m "$mode" 'index($m) != null' >/dev/null; then
+            echo "Mode '$mode' is not in enabled_modes for this repo." >&2
+            echo "  enabled_modes=$ENABLED_MODES" >&2
+            echo "  trigger=$cmd" >&2
+            exit 1
+          fi
+          echo "mode=$mode"   >> "$GITHUB_OUTPUT"
+          echo "model=$model" >> "$GITHUB_OUTPUT"
+          echo "Selected mode=$mode model=$model"
+
+      # Build dynamic prompt fragments from inputs. Multi-line outputs
+      # use the heredoc syntax in $GITHUB_OUTPUT.
+      - name: Assemble prompt fragments
+        id: prompt_bits
+        env:
+          REVIEW_FOCUS_PATHS: ${{ inputs.review_focus_paths }}
+          GATES_PATHS: ${{ inputs.gates_paths }}
+        run: |
+          set -euo pipefail
+
+          render_paths_block() {
+            local label="$1"
+            local content="$2"
+            if [[ -z "${content//[[:space:]]/}" ]]; then
+              echo "$label: (none configured for this repo)"
+            else
+              echo "$label:"
+              printf '%s\n' "$content" | sed '/^[[:space:]]*$/d; s/^[[:space:]]*/  - /'
+            fi
+          }
+
+          {
+            echo "review_focus_block<<__GHA_EOF__"
+            render_paths_block "Priority paths in 'review' mode" "$REVIEW_FOCUS_PATHS"
+            echo "__GHA_EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "gates_paths_block<<__GHA_EOF__"
+            render_paths_block "File matchers in 'gates' mode" "$GATES_PATHS"
+            echo "__GHA_EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      # NOTE: github.event.comment.body is interpolated into the prompt
+      # below and sent to Anthropic's API. The trusted-actor gate above
+      # bounds who can fire this workflow but does not sanitize comment
+      # content. Reviewers must not paste secrets, tokens, or PII into
+      # trigger comments.
+      - uses: anthropics/claude-code-action@939ae9c056ecf8a1a01409ddd1c4eadec5f8c77b  # v1.0.116
+        with:
+          claude_code_oauth_token: ${{ secrets.claude_code_oauth_token }}
+          # Allowlist rationale (see also central/.github/scripts/post-claude-review.sh):
+          # - gh pr view / gh pr diff: read-only, fetch PR state.
+          # - post-claude-review.sh: the ONE allowed posting tool. It
+          #   accepts an integer-validated PR number + reads body from
+          #   stdin only; refuses --body-file <path> and any other gh
+          #   flag. Combined with the prompt's <<'EOF' (quoted heredoc)
+          #   discipline, untrusted PR content cannot be shell-expanded
+          #   en route to gh.
+          claude_args: '--model ${{ steps.mode.outputs.model }} --add-dir pr-head --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(./central/.github/scripts/post-claude-review.sh:*)"'
+          prompt: |-
+            You are reviewing a pull request for ${{ inputs.repo_label != '' && inputs.repo_label || github.event.repository.name }}.
+            Invoked mode: ${{ steps.mode.outputs.mode }}.
+
+            Workspace layout:
+            - Caller's default branch at the repository root (action infrastructure; do not review).
+            - PR head at `pr-head/` — the surface you are reviewing.
+            - Central tooling (post-comment wrapper) at `central/`.
+
+            When the prompt references file paths like `foo/bar.py`, look
+            for them at `pr-head/foo/bar.py`.
+
+            Triggering comment (verbatim, between markers):
+            >>>BEGIN_COMMENT
+            ${{ github.event.comment.body }}
+            >>>END_COMMENT
+
+            Use the triggering comment for targeting hints: explicit file
+            paths, mentioned concerns, references to ADRs or modules, or
+            free-form narrative about what to scrutinize. The PR description
+            may also contain a "Focus:" section naming surfaces the author
+            wants reviewed; treat that as an additional target source.
+
+            Repo-specific configuration for this PR:
+            ${{ steps.prompt_bits.outputs.review_focus_block }}
+
+            ${{ steps.prompt_bits.outputs.gates_paths_block }}
+
+            Mode behavior:
+            * review (default): focused pass on the PR diff. Read at most
+              15 files. If priority paths are configured above, weight your
+              attention there first; otherwise treat the diff as uniform.
+              Skip benchmarks, schemas, and planning narratives entirely.
+            * quick: scan the diff only for obvious AI-failure-mode issues
+              (hallucinated references, silent fallbacks, magic values,
+              stale docstrings). Read at most 5 files. Output one short
+              comment. Use this mode for routine PRs.
+            * deep: thorough pass across the full diff with no budget cap.
+              Read what you need. Use only when the reviewer wants depth.
+            * gates: review only files matching the gates path matchers
+              listed above. If no matchers are configured for this repo,
+              post a single short comment explaining gates mode is not
+              enabled here and stop. When matchers ARE configured: check
+              for new skip/tolerate/fallback branches in gate logic,
+              cross-file vocabulary mismatch (reader vs writer field
+              names), and shell hardening on gate scripts.
+            * opus: targeted, expensive deep-reasoning pass on a small
+              surface. REQUIRES explicit targeting. Acceptable target
+              sources, in priority order:
+              1. The triggering comment names specific files, modules,
+                 ADR numbers, or a clear concern.
+              2. The PR description has a "Focus:" section naming the
+                 surfaces the author wants scrutinized.
+              3. The PR is small enough (≤10 changed files) that the
+                 entire diff IS the focus.
+              If none of these are met — bare `@claude opus`, no Focus
+              section, large diff — DO NOT review. Post a single short
+              comment explaining that opus mode requires explicit targeting
+              and listing the three acceptable target sources above. Stop
+              without spending the reasoning budget. When targeting IS
+              clear: read at most 3 files. Spend the budget on subtle
+              issues pattern matching would miss: cross-file invariant
+              violations, ADR contradictions, second-order effects of new
+              gate branches, contract drift between reader and writer.
+              Output high-confidence findings only — terse over verbose.
+              Skip anything Sonnet would also catch; this mode is for
+              things that need Opus-level reasoning to be reliably surfaced.
+
+            Across all modes:
+            * Read AGENTS.md once (at `pr-head/${{ inputs.agents_md_path }}`)
+              for the operative discipline. If that file does not exist,
+              proceed without it — do not invent contents.
+            * Focus on AI-authored-code failure modes (hallucinated refs,
+              silent fallbacks, speculative scaffolding, stale docs, magic
+              values) over style.
+            * Available shell tools:
+              - `gh pr view ${{ github.event.issue.number }} --comments`
+                to see existing CodeRabbit / Codex findings and avoid
+                duplicating them.
+              - `gh pr diff ${{ github.event.issue.number }}` to inspect
+                the diff if needed.
+              - `./central/.github/scripts/post-claude-review.sh <pr-number>`
+                — the ONLY way to post your final review (see below).
+              You do NOT have access to test runners (pytest, schema
+              validators, etc.) or to `gh pr comment` directly; when the
+              PR description names verifications, judge whether they are
+              plausible and specific without trying to execute them.
+            * When done, post your review as a single top-level PR comment
+              by piping the body into the wrapper script via a QUOTED
+              heredoc. The single quotes around `'EOF'` are required —
+              they prevent bash from expanding $(...), $var, or backticks
+              in your review text before the wrapper sees it:
+
+                  ./central/.github/scripts/post-claude-review.sh ${{ github.event.issue.number }} <<'EOF'
+                  <your review body here, multi-line OK>
+                  EOF
+
+              Post exactly one comment. Do not post inline comments. Do
+              not modify code. Do not attempt to use `gh pr comment`
+              directly — it is not in the allowlist.
