@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+      - name: Install actionlint
+        run: |
+          set -euo pipefail
+          curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | bash
+          sudo mv actionlint /usr/local/bin/actionlint
+      - name: Run actionlint
+        run: actionlint .github/workflows/*.yml
+      - name: Run shellcheck
+        run: |
+          set -euo pipefail
+          for f in .github/scripts/*.sh; do
+            shellcheck "$f"
+          done
+      - name: Install yamllint
+        run: pipx install yamllint || pip install --user yamllint
+      - name: Run yamllint
+        run: yamllint .github/workflows/
+
+  dispatcher-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+      - name: Run dispatcher smoke test
+        run: bash .github/scripts/test-dispatcher.sh
