@@ -75,6 +75,14 @@ on:
             "forward-compat": "Assess readiness for the next roadmap phase: architectural fit, likely refactors, ADR pressure, and pre-work that should happen before the phase begins.",
             "discipline": "Audit AGENTS.md and ADR commitments against the repo: forbidden behaviors, required patterns, hook-enforced checks, and discipline-only drift."
           }
+      extra_allowed_tools:
+        description: |-
+          Optional comma-separated claude-code-action allowedTools entries for
+          caller-provided diagnostics. STATIC ANALYSIS ONLY. DO NOT add test runners,
+          installers, build tools, network fetchers, or code-execution surfaces.
+        required: false
+        type: string
+        default: ""
       agents_md_path:
         description: |-
           Path to AGENTS.md within pr-head/. Default 'AGENTS.md', i.e.
@@ -265,6 +273,19 @@ jobs:
             echo "__GHA_EOF__"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Assemble allowlist
+        id: allowlist
+        env:
+          EXTRA: ${{ inputs.extra_allowed_tools }}
+        run: |
+          base='Bash(gh pr view:*),Bash(gh pr diff:*),Bash(./central/.github/scripts/post-claude-review.sh:*)'
+          if [[ -n "${EXTRA//[[:space:]]/}" ]]; then
+            full="${base},${EXTRA}"
+          else
+            full="${base}"
+          fi
+          echo "tools=$full" >> "$GITHUB_OUTPUT"
+
       # NOTE: github.event.comment.body is interpolated into the prompt
       # below and sent to Anthropic's API. The trusted-actor gate above
       # bounds who can fire this workflow but does not sanitize comment
@@ -282,7 +303,7 @@ jobs:
           #   with the prompt's <<'EOF' (quoted heredoc) discipline,
           #   untrusted PR/issue content cannot be shell-expanded en route
           #   to gh.
-          claude_args: '--model ${{ steps.mode.outputs.model }} --add-dir pr-head --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(./central/.github/scripts/post-claude-review.sh:*)"'
+          claude_args: '--model ${{ steps.mode.outputs.model }} --add-dir pr-head --allowedTools "${{ steps.allowlist.outputs.tools }}"'
           prompt: |-
             You are reviewing a repository event for ${{ inputs.repo_label != '' && inputs.repo_label || github.event.repository.name }}.
             Invoked mode: ${{ steps.mode.outputs.mode }}.
