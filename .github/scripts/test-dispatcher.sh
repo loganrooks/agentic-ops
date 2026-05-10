@@ -80,6 +80,7 @@ assert "gatesomething prefix" ""       "@claude gatesomething"
 assert "deeper prefix"        ""       "@claude deeper"
 assert "opuscar prefix"       ""       "@claude opuscar"
 assert "quickly prefix"       ""       "@claude quickly look"
+assert "surveying prefix"     ""       "@claude surveying this PR"
 
 # ----- Other negative cases -----
 assert "no @claude"           ""       "please review this"
