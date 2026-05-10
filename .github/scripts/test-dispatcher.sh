@@ -17,9 +17,14 @@ set -euo pipefail
 dispatch_full() {
   local body="$1"
   local cmd mode model audit_target
-  # First non-empty line, leading/trailing whitespace stripped — same
-  # extraction logic as review.yml's awk pipeline.
-  cmd="$(printf '%s\n' "$body" | awk 'NF { sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); print; exit }')"
+  # First non-empty line, leading/trailing whitespace stripped, plus
+  # trailing \r so CRLF/CR line endings match the case patterns. Mirrors
+  # review.yml's awk pipeline.
+  cmd="$(printf '%s\n' "$body" | awk 'NF { sub(/\r$/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); print; exit }')"
+  # Cap first-line length (mirror of review.yml's 512-char guard).
+  if [ "${#cmd}" -gt 512 ]; then
+    return 1
+  fi
   audit_target=""
   case "$cmd" in
     "@claude opus"|"@claude opus "*)     mode=opus;   model=claude-opus-4-7   ;;
@@ -31,7 +36,11 @@ dispatch_full() {
     "@claude audit"|"@claude audit "*|"@claude audit:"*)
       mode=audit
       model=claude-sonnet-4-6
-      audit_target="$(printf '%s' "$cmd" | sed -E 's/^@claude audit:?[[:space:]]*//')"
+      # Strip prefix, then filter to printable+whitespace to drop
+      # bidi/zero-width/control unicode (trojan-source class). LC_ALL=C
+      # forces byte-by-byte filtering so the result is deterministic
+      # across runner locales (mirror of review.yml).
+      audit_target="$(printf '%s' "$cmd" | sed -E 's/^@claude audit:?[[:space:]]*//' | LC_ALL=C tr -cd '[:print:][:space:]')"
       ;;
     *) return 1 ;;
   esac
@@ -134,5 +143,28 @@ assert "whitespace body"      ""       "   "
 # non-empty line.
 assert "leading blank lines"  "review" $'\n\n@claude review\nnotes below'
 assert "trigger after text"   ""       $'some prose\n@claude review'
+
+# ----- Fuzz-hardening regressions (see /tmp/agentic-ops-drafts/FUZZ-FINDINGS.md) -----
+# Gap 1: CRLF / CR line endings must be tolerated.
+assert     "crlf bare trigger"     "review" $'@claude review\r\n'
+assert     "crlf trailing only"    "review" $'@claude review\r'
+assert_full "crlf audit lens"      "audit"  "claude-sonnet-4-6" "agential-dx" $'@claude audit:agential-dx\r\n'
+
+# Gap 2: first-line length is capped (>512 chars rejected). Pad a real
+# trigger so we know rejection is due to the length cap, not a missed
+# pattern match.
+long_payload="$(printf 'x%.0s' {1..600})"
+assert "first line over 512 chars rejected" "" "@claude review $long_payload"
+# Boundary: 512 chars exactly should still pass. "@claude review " is 15
+# chars; pad the tail with 497 x's so the full first line is 512.
+boundary_payload="$(printf 'x%.0s' {1..497})"
+assert "first line at 512 chars accepted" "review" "@claude review $boundary_payload"
+
+# Gap 3: bidi/control unicode in audit_target is stripped before
+# interpolation. U+202E (right-to-left override) is e2 80 ae in UTF-8.
+assert_full "audit bidi target stripped"  "audit" "claude-sonnet-4-6" "exfil" $'@claude audit: \xe2\x80\xaeexfil'
+# Zero-width joiner (U+200D, e2 80 8d) inside an otherwise-clean lens
+# name should also be stripped.
+assert_full "audit zwj inside target stripped" "audit" "claude-sonnet-4-6" "agentialdx" $'@claude audit:agential\xe2\x80\x8ddx'
 
 echo "All dispatcher tests passed."

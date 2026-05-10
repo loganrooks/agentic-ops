@@ -206,8 +206,19 @@ jobs:
           set -euo pipefail
           # Extract first non-empty trimmed line. Strict first-line match
           # (vs anywhere-in-body) avoids firing on incidental mentions in
-          # discussion threads.
-          cmd="$(printf '%s\n' "$BODY" | awk 'NF { sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); print; exit }')"
+          # discussion threads. Trailing \r is stripped so CRLF/CR line
+          # endings (from compromised toolchains or non-web clients) do
+          # not silently fail the case match.
+          cmd="$(printf '%s\n' "$BODY" | awk 'NF { sub(/\r$/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); print; exit }')"
+          # Cap first-line length to bound prompt-token cost from a
+          # trusted-actor posting a deliberately-long trigger. 512 chars
+          # is comfortably above any plausible audit-lens or free-form
+          # target while preventing 2KB+ payloads from flowing into the
+          # billed prompt.
+          if [ "${#cmd}" -gt 512 ]; then
+            echo "Trigger first line exceeds 512 chars (got ${#cmd})." >&2
+            exit 1
+          fi
           # Patterns require either exact match ('@claude X') or trailing
           # whitespace ('@claude X ...'); this prevents '@claude reviewing'
           # or '@claude gatesomething' from matching review/gates by prefix.
@@ -222,7 +233,14 @@ jobs:
             "@claude audit"|"@claude audit "*|"@claude audit:"*)
               mode=audit
               model=claude-sonnet-4-6
-              audit_target="$(printf '%s' "$cmd" | sed -E 's/^@claude audit:?[[:space:]]*//')"
+              # Strip the trigger prefix, then filter to printable + whitespace
+              # only. Defends against bidi/zero-width/control unicode (CVE-2021-42574
+              # "trojan source" class) flowing into the audit prompt or back into
+              # PR comments where a human reviewer would render them. LC_ALL=C
+              # forces tr to operate byte-by-byte so the filter is deterministic
+              # regardless of the runner's locale; any non-ASCII byte (>=0x80)
+              # is dropped. Audit lens names are ASCII by convention.
+              audit_target="$(printf '%s' "$cmd" | sed -E 's/^@claude audit:?[[:space:]]*//' | LC_ALL=C tr -cd '[:print:][:space:]')"
               ;;
             *) echo "First line did not match an allowed trigger phrase: '$cmd'" >&2; exit 1 ;;
           esac
