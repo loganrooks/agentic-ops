@@ -81,3 +81,34 @@ before the security-sensitive P2/P3/P4 phases land.
 The decimal-numbering convention (P1.5) signals "inserted between
 P1 and P2 without renumbering downstream phases" — the original
 plan's numbering and detail are preserved.
+
+## Conditional future phases (post-OQ-1 resolution)
+
+The roadmap above (P0..P9) is bounded by `docs/adr/ADR-006-bounded-
+deployment-scope.md` to internal `loganrooks/*` consumers. **No
+phases beyond P9 are planned at present.**
+
+If/when `OPEN_QUESTIONS.md` OQ-1 resolves toward "open-source
+product" — and ADR-006's trigger conditions for revisiting are met
+— wide-deployment-readiness work will be planned. The shape of that
+work is itself an open question tracked as OQ-11 ("Wide-deployment
+readiness shape"); possible shapes are a spike phase, a full-stack
+readiness phase, or piecemeal-as-need-surfaces. The current leaning
+in OQ-11 is piecemeal.
+
+Any wide-deployment phase, regardless of shape, must ship the
+TC-7..TC-11 mitigations named in `docs/adr/ADR-007-threat-model-
+gating.md` as preconditions, not as follow-ups. The mitigations
+include schema validation on workflow_call inputs, an
+extra_allowed_tools deny-list, signed `v1` tag, delayed-update
+window, fork-substitution self-check, per-consumer credentials, and
+adversarial-content markers in audit/survey prompts. None of these
+are in scope for P0..P9.
+
+The shape of the auth model under wide deployment (workspace OAuth,
+API-key billing, BYO-token, or other) is reserved for a separate
+ADR if/when needed; ADR-006 commits the substrate to plan auth +
+single principal until that ADR exists.
+
+This section will be replaced (not edited in place) when a concrete
+wide-deployment phase is added.
