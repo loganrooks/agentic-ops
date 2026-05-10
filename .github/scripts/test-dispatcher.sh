@@ -14,21 +14,33 @@ set -euo pipefail
 
 # ----- Dispatcher (mirror of review.yml) -----
 # When review.yml's case statement changes, mirror the change here.
-dispatch() {
+dispatch_full() {
   local body="$1"
-  local cmd
+  local cmd mode model audit_target
   # First non-empty line, leading/trailing whitespace stripped — same
   # extraction logic as review.yml's awk pipeline.
   cmd="$(printf '%s\n' "$body" | awk 'NF { sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); print; exit }')"
+  audit_target=""
   case "$cmd" in
-    "@claude opus"|"@claude opus "*)     echo "opus";   return 0 ;;
-    "@claude deep"|"@claude deep "*)     echo "deep";   return 0 ;;
-    "@claude quick"|"@claude quick "*)   echo "quick";  return 0 ;;
-    "@claude gates"|"@claude gates "*)   echo "gates";  return 0 ;;
-    "@claude review"|"@claude review "*) echo "review"; return 0 ;;
-    "@claude survey"|"@claude survey "*) echo "survey"; return 0 ;;
+    "@claude opus"|"@claude opus "*)     mode=opus;   model=claude-opus-4-7   ;;
+    "@claude deep"|"@claude deep "*)     mode=deep;   model=claude-sonnet-4-6 ;;
+    "@claude quick"|"@claude quick "*)   mode=quick;  model=claude-sonnet-4-6 ;;
+    "@claude gates"|"@claude gates "*)   mode=gates;  model=claude-sonnet-4-6 ;;
+    "@claude review"|"@claude review "*) mode=review; model=claude-sonnet-4-6 ;;
+    "@claude survey"|"@claude survey "*) mode=survey; model=claude-sonnet-4-6 ;;
+    "@claude audit"|"@claude audit "*|"@claude audit:"*)
+      mode=audit
+      model=claude-sonnet-4-6
+      audit_target="$(printf '%s' "$cmd" | sed -E 's/^@claude audit:?[[:space:]]*//')"
+      ;;
     *) return 1 ;;
   esac
+  printf 'mode=%s\nmodel=%s\naudit_target=%s\n' "$mode" "$model" "$audit_target"
+}
+
+dispatch() {
+  local body="$1"
+  dispatch_full "$body" | sed -n 's/^mode=//p'
 }
 
 # ----- Test harness -----
@@ -60,6 +72,25 @@ assert() {
   fi
 }
 
+# assert_full <name> <expected-mode> <expected-model> <expected-audit-target> <body>
+assert_full() {
+  local name="$1" expected_mode="$2" expected_model="$3" expected_target="$4" body="$5"
+  local output actual_mode actual_model actual_target
+  if ! output="$(dispatch_full "$body" 2>/dev/null)"; then
+    echo "FAIL: $name — dispatcher rejected body" >&2
+    exit 1
+  fi
+  actual_mode="$(printf '%s\n' "$output" | sed -n 's/^mode=//p')"
+  actual_model="$(printf '%s\n' "$output" | sed -n 's/^model=//p')"
+  actual_target="$(printf '%s\n' "$output" | sed -n 's/^audit_target=//p')"
+  if [[ "$actual_mode" == "$expected_mode" && "$actual_model" == "$expected_model" && "$actual_target" == "$expected_target" ]]; then
+    echo "PASS: $name"
+  else
+    echo "FAIL: $name — expected=[$expected_mode|$expected_model|$expected_target] actual=[$actual_mode|$actual_model|$actual_target]" >&2
+    exit 1
+  fi
+}
+
 # ----- Positive cases (each currently-supported mode, bare + with text) -----
 assert "review bare"          "review" "@claude review"
 assert "review with text"     "review" "@claude review please look at auth"
@@ -73,6 +104,14 @@ assert "opus bare"            "opus"   "@claude opus"
 assert "opus with text"       "opus"   "@claude opus check cli vs config"
 assert "survey bare"          "survey" "@claude survey"
 assert "survey with text"     "survey" "@claude survey map this large PR"
+assert "audit bare"           "audit"  "@claude audit"
+assert "audit lens"           "audit"  "@claude audit:agential-dx"
+assert "audit free-form"      "audit"  "@claude audit Are we ready?"
+
+# ----- Audit output cases (mode + model + audit_target) -----
+assert_full "audit bare outputs"      "audit" "claude-sonnet-4-6" ""              "@claude audit"
+assert_full "audit lens outputs"      "audit" "claude-sonnet-4-6" "agential-dx"   "@claude audit:agential-dx"
+assert_full "audit free-form outputs" "audit" "claude-sonnet-4-6" "Are we ready?" "@claude audit Are we ready?"
 
 # ----- Word-boundary cases (must reject prefix-only matches) -----
 assert "reviewing prefix"     ""       "@claude reviewing my code"
@@ -81,6 +120,7 @@ assert "deeper prefix"        ""       "@claude deeper"
 assert "opuscar prefix"       ""       "@claude opuscar"
 assert "quickly prefix"       ""       "@claude quickly look"
 assert "surveying prefix"     ""       "@claude surveying this PR"
+assert "auditing prefix"      ""       "@claude auditing the repo"
 
 # ----- Other negative cases -----
 assert "no @claude"           ""       "please review this"

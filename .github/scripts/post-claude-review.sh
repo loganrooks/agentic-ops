@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# post-claude-review.sh — narrow wrapper around `gh pr comment` for the
-# Claude PR review workflow.
+# post-claude-review.sh — narrow wrapper around `gh pr comment` /
+# `gh issue comment` for the Claude review workflow.
 #
 # Why this exists
 # ---------------
 # The workflow runs with privileged secrets (CLAUDE_CODE_OAUTH_TOKEN,
 # GH_TOKEN/GITHUB_TOKEN, runner env). Granting Claude broad access to
-# `gh pr comment:*` via --allowedTools opens two attack surfaces against
-# untrusted PR-derived content:
+# `gh pr comment:*` or `gh issue comment:*` via --allowedTools opens two
+# attack surfaces against untrusted PR- or issue-derived content:
 #
 #   1. File exfiltration via `gh pr comment <pr> --body-file <path>`.
 #      Prompt-injected text could direct Claude to post arbitrary files
@@ -17,8 +17,9 @@
 #      before gh sees them).
 #
 # This wrapper closes both:
-#   * Accepts ONE positional argument: the PR number, validated as a
-#     non-empty integer. No flags. No file paths. No URLs.
+#   * Accepts one required positional argument: the PR/issue number,
+#     validated as a non-empty integer. Accepts one optional fixed enum:
+#     `pr` (default) or `issue`. No flags. No file paths. No URLs.
 #   * Reads the comment body from STDIN ONLY and forwards it to gh via
 #     `--body-file -`. Callers must pipe via a quoted heredoc
 #     (`<<'EOF'`) so that bash itself does not expand the body before
@@ -29,36 +30,43 @@
 # Hardening discipline
 # --------------------
 # Allowlist Bash(./.github/scripts/post-claude-review.sh:*) instead of
-# Bash(gh pr comment:*). The trailing :* still lets Claude pass the PR
-# number, but the script itself is the only thing that gets to talk to
-# gh, and the script's surface is exactly: one integer + stdin.
+# Bash(gh pr comment:*) / Bash(gh issue comment:*). The trailing :*
+# still lets Claude pass the numeric target and optional fixed surface,
+# but the script itself is the only thing that gets to talk to gh, and
+# the script's surface is exactly: one integer + optional enum + stdin.
 
 set -euo pipefail
 
 usage() {
   cat >&2 <<'USAGE'
-usage: post-claude-review.sh <pr-number>
+usage: post-claude-review.sh <number> [pr|issue]
 
-  Reads the PR comment body from stdin and posts it as a single
-  top-level comment on the given PR. Pipe via quoted heredoc:
+  Reads the comment body from stdin and posts it as a single top-level
+  comment on the given PR (default) or issue. Pipe via quoted heredoc:
 
-    ./.github/scripts/post-claude-review.sh 42 <<'EOF'
+    ./.github/scripts/post-claude-review.sh 42 pr <<'EOF'
     review body here
     EOF
 USAGE
   exit 2
 }
 
-if [[ $# -ne 1 ]]; then
-  echo "error: expected exactly one argument (PR number), got $#" >&2
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "error: expected one or two arguments (number plus optional pr|issue), got $#" >&2
   usage
 fi
 
-pr="$1"
+number="$1"
+surface="${2:-pr}"
 
 # Integer-only. No leading +/-, no whitespace, no flags, no paths.
-if [[ ! "$pr" =~ ^[0-9]+$ ]]; then
-  echo "error: PR number must be a non-negative integer, got: $pr" >&2
+if [[ ! "$number" =~ ^[0-9]+$ ]]; then
+  echo "error: target number must be a non-negative integer, got: $number" >&2
+  exit 2
+fi
+
+if [[ "$surface" != "pr" && "$surface" != "issue" ]]; then
+  echo "error: target surface must be 'pr' or 'issue', got: $surface" >&2
   exit 2
 fi
 
@@ -74,4 +82,11 @@ fi
 # --body-file - reads from stdin, so re-feed the body we just consumed.
 # Using exec is intentional: this script has no work to do after the
 # gh call, and exec gives gh's exit status directly to the caller.
-exec gh pr comment "$pr" --body-file - <<<"$body"
+case "$surface" in
+  pr)
+    exec gh pr comment "$number" --body-file - <<<"$body"
+    ;;
+  issue)
+    exec gh issue comment "$number" --body-file - <<<"$body"
+    ;;
+esac

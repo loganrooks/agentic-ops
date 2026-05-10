@@ -4,7 +4,7 @@ name: Claude PR Review (centralized)
 #
 # Centralized concerns (owned here):
 #   * trusted-actor + trigger-phrase gate
-#   * mode dispatcher (review / quick / deep / gates / opus / survey)
+#   * mode dispatcher (review / quick / deep / gates / opus / survey / audit)
 #   * claude-code-action invocation + allowedTools allowlist
 #   * the post-comment wrapper script (closes Comment-and-Control)
 #   * concurrency group, timeout, permissions
@@ -29,7 +29,7 @@ name: Claude PR Review (centralized)
 #     review:
 #       uses: loganrooks/agentic-ops/.github/workflows/review.yml@v1
 #       with:
-#         enabled_modes: '["review","quick","deep","opus","survey"]'
+#         enabled_modes: '["review","quick","deep","opus","survey","audit"]'
 #         review_focus_paths: |
 #           src/important.py
 #       secrets:
@@ -41,11 +41,11 @@ on:
       enabled_modes:
         description: |-
           JSON array of mode names this repo supports, drawn from the
-          central registry: review, quick, deep, gates, opus, survey. Modes not
-          listed are rejected at dispatch with an explanatory error.
+          central registry: review, quick, deep, gates, opus, survey, audit.
+          Modes not listed are rejected at dispatch with an explanatory error.
         required: false
         type: string
-        default: '["review","quick","deep","opus","survey"]'
+        default: '["review","quick","deep","opus","survey","audit"]'
       review_focus_paths:
         description: |-
           Newline-separated paths or globs to prioritize in 'review' mode.
@@ -61,6 +61,20 @@ on:
         required: false
         type: string
         default: ""
+      audit_lens_registry:
+        description: |-
+          JSON object mapping audit lens ids to lens prompts. Callers may
+          override to add repo-specific lenses; the default registry includes
+          the four built-in lenses defined by ADR-001.
+        required: false
+        type: string
+        default: >-
+          {
+            "agential-dx": "Survey workspace organization for AI contributors: AGENTS.md/CLAUDE.md, ADR coverage, runbooks, context freshness, and contribution guidance.",
+            "tech-debt": "Find refactor candidates by signal density: TODO/FIXME/HACK concentration, large or high-churn files, duplication, stale scaffolding, and doc-code drift.",
+            "forward-compat": "Assess readiness for the next roadmap phase: architectural fit, likely refactors, ADR pressure, and pre-work that should happen before the phase begins.",
+            "discipline": "Audit AGENTS.md and ADR commitments against the repo: forbidden behaviors, required patterns, hook-enforced checks, and discipline-only drift."
+          }
       agents_md_path:
         description: |-
           Path to AGENTS.md within pr-head/. Default 'AGENTS.md', i.e.
@@ -106,9 +120,14 @@ jobs:
     # does not depend on that — this gate is the contract.
     if: |
       github.event_name == 'issue_comment' &&
-      github.event.issue.pull_request != null &&
       startsWith(github.event.comment.body, '@claude ') &&
-      contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+      contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+      (
+        github.event.issue.pull_request != null ||
+        github.event.comment.body == '@claude audit' ||
+        startsWith(github.event.comment.body, '@claude audit ') ||
+        startsWith(github.event.comment.body, '@claude audit:')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.timeout_minutes }}
     steps:
@@ -154,10 +173,17 @@ jobs:
       # action's working tree at root stays trusted; passed to Claude
       # via --add-dir below.
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        if: ${{ github.event.issue.pull_request != null }}
         with:
           ref: refs/pull/${{ github.event.issue.number }}/head
           path: pr-head
           fetch-depth: 50
+
+      # Non-PR audit runs review the caller's default branch at root. Keep
+      # an empty pr-head/ so the shared --add-dir argument remains valid.
+      - name: Ensure pr-head exists for issue audit
+        if: ${{ github.event.issue.pull_request == null }}
+        run: mkdir -p pr-head
 
       - name: Determine review mode
         id: mode
@@ -173,6 +199,7 @@ jobs:
           # Patterns require either exact match ('@claude X') or trailing
           # whitespace ('@claude X ...'); this prevents '@claude reviewing'
           # or '@claude gatesomething' from matching review/gates by prefix.
+          audit_target=""
           case "$cmd" in
             "@claude opus"|"@claude opus "*)     mode=opus;   model=claude-opus-4-7   ;;
             "@claude deep"|"@claude deep "*)     mode=deep;   model=claude-sonnet-4-6 ;;
@@ -180,6 +207,11 @@ jobs:
             "@claude gates"|"@claude gates "*)   mode=gates;  model=claude-sonnet-4-6 ;;
             "@claude review"|"@claude review "*) mode=review; model=claude-sonnet-4-6 ;;
             "@claude survey"|"@claude survey "*) mode=survey; model=claude-sonnet-4-6 ;;
+            "@claude audit"|"@claude audit "*|"@claude audit:"*)
+              mode=audit
+              model=claude-sonnet-4-6
+              audit_target="$(printf '%s' "$cmd" | sed -E 's/^@claude audit:?[[:space:]]*//')"
+              ;;
             *) echo "First line did not match an allowed trigger phrase: '$cmd'" >&2; exit 1 ;;
           esac
           # Validate against this consumer's enabled_modes JSON array.
@@ -189,8 +221,11 @@ jobs:
             echo "  trigger=$cmd" >&2
             exit 1
           fi
-          echo "mode=$mode"   >> "$GITHUB_OUTPUT"
-          echo "model=$model" >> "$GITHUB_OUTPUT"
+          {
+            echo "mode=$mode"
+            echo "model=$model"
+            echo "audit_target=$audit_target"
+          } >> "$GITHUB_OUTPUT"
           echo "Selected mode=$mode model=$model"
 
       # Build dynamic prompt fragments from inputs. Multi-line outputs
@@ -237,23 +272,27 @@ jobs:
           # Allowlist rationale (see also central/.github/scripts/post-claude-review.sh):
           # - gh pr view / gh pr diff: read-only, fetch PR state.
           # - post-claude-review.sh: the ONE allowed posting tool. It
-          #   accepts an integer-validated PR number + reads body from
-          #   stdin only; refuses --body-file <path> and any other gh
-          #   flag. Combined with the prompt's <<'EOF' (quoted heredoc)
-          #   discipline, untrusted PR content cannot be shell-expanded
-          #   en route to gh.
+          #   accepts an integer-validated PR/issue number plus an optional
+          #   fixed pr|issue surface enum, then reads body from stdin only;
+          #   refuses --body-file <path> and any other gh flag. Combined
+          #   with the prompt's <<'EOF' (quoted heredoc) discipline,
+          #   untrusted PR/issue content cannot be shell-expanded en route
+          #   to gh.
           claude_args: '--model ${{ steps.mode.outputs.model }} --add-dir pr-head --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(./central/.github/scripts/post-claude-review.sh:*)"'
           prompt: |-
-            You are reviewing a pull request for ${{ inputs.repo_label != '' && inputs.repo_label || github.event.repository.name }}.
+            You are reviewing a repository event for ${{ inputs.repo_label != '' && inputs.repo_label || github.event.repository.name }}.
             Invoked mode: ${{ steps.mode.outputs.mode }}.
+            Audit target: ${{ steps.mode.outputs.audit_target }}.
 
             Workspace layout:
-            - Caller's default branch at the repository root (action infrastructure; do not review).
-            - PR head at `pr-head/` — the surface you are reviewing.
+            - Caller's default branch at the repository root.
+            - For PR-triggered modes, PR head is at `pr-head/` — the surface you are reviewing.
+            - For non-PR issue-triggered audit, `pr-head/` is intentionally empty; review the repository root.
             - Central tooling (post-comment wrapper) at `central/`.
 
-            When the prompt references file paths like `foo/bar.py`, look
-            for them at `pr-head/foo/bar.py`.
+            When PR-mode instructions reference file paths like `foo/bar.py`,
+            look for them at `pr-head/foo/bar.py`. In non-PR issue audit,
+            look for repository paths at the root.
 
             Triggering comment (verbatim, between markers):
             >>>BEGIN_COMMENT
@@ -270,6 +309,9 @@ jobs:
             ${{ steps.prompt_bits.outputs.review_focus_block }}
 
             ${{ steps.prompt_bits.outputs.gates_paths_block }}
+
+            Audit lens registry JSON:
+            ${{ inputs.audit_lens_registry }}
 
             Mode behavior:
             * review (default): focused pass on the PR diff. Read at most
@@ -379,7 +421,7 @@ jobs:
 
               Post ONE comment via the wrapper script:
 
-                  ./central/.github/scripts/post-claude-review.sh ${{ github.event.issue.number }} <<'EOF'
+                  ./central/.github/scripts/post-claude-review.sh ${{ github.event.issue.number }} pr <<'EOF'
                   <body>
                   EOF
 
@@ -392,35 +434,124 @@ jobs:
                 - Max files read in Phase 3: 6 (AGENTS.md + up to 5 ADRs)
                 - Hard timeout: ${{ inputs.timeout_minutes }} min (workflow-level)
 
+            * audit: whole-codebase review against a question or lens. A
+              target is recommended but not required — bare `@claude audit`
+              runs the default lens `audit:agential-dx` and must note that
+              implicit default in the report header.
+
+              Lens parsing:
+                - Read the extracted target from
+                  `steps.mode.outputs.audit_target` (shown above as Audit target).
+                - If audit_target is empty, use built-in lens
+                  `audit:agential-dx`.
+                - Else if audit_target starts with a known lens id
+                  (`agential-dx`, `tech-debt`, `forward-compat`,
+                  `discipline`), use that built-in lens from the registry.
+                - Otherwise, treat the entire audit_target as a free-form
+                  question and build an ad-hoc lens.
+
+              Workspace context:
+                - PR comment trigger: review `pr-head/`.
+                - Issue comment trigger (non-PR): review the repository root
+                  at the caller's default branch.
+
+              Whole-codebase navigation strategy:
+                - DO NOT attempt to read every file. Sample, do not enumerate.
+                - PHASE 1 — Discipline map (read 3-6 files): AGENTS.md or
+                  equivalent, README.md, roadmap/horizon docs if present,
+                  ADR titles and relevant ADR full text, CONTRIBUTING.md if
+                  present. Build a concise map of what the repo claims about
+                  itself.
+                - PHASE 2 — Lens-driven sampling (read 6-12 files): identify
+                  load-bearing surfaces relevant to the selected lens and
+                  sample representative files. Goal: enough evidence to support
+                  specific findings, not exhaustive coverage.
+                - PHASE 3 — Synthesize against the lens.
+                - PHASE 4 — Post on the triggering surface.
+
+              Built-in lens guidance:
+                - audit:agential-dx — workspace organization for AI
+                  contributors: operative-discipline docs, ADR coverage,
+                  runbooks, context freshness, do-not-do lists, and whether an
+                  AI contributor can contribute safely.
+                - audit:tech-debt — TODO/FIXME/HACK density, duplicated logic,
+                  commented-out code, speculative scaffolding, doc-code drift,
+                  and deprecated patterns the repo's own ADRs flag.
+                - audit:forward-compat — readiness for the next roadmap phase:
+                  architecture fit, likely refactors, ADR pressure, and pre-work
+                  that should happen now versus when the phase begins.
+                - audit:discipline — AGENTS.md and ADR commitments versus repo
+                  reality; distinguish hook-enforced commitments from
+                  discipline-only commitments.
+                - Free-form — state that the audit used a free-form question
+                  and recommend promoting it to a named lens if it recurs.
+
+              Output format:
+                - Prepend a metadata header:
+
+                    Mode: audit | Lens: <id-or-"free-form"> | Model: <model>
+                    Files read: <n> | Directories traversed: <n>
+                    Runtime: <sec>s | Commit SHA: <sha> | Run: <url>
+
+                - Findings sectioned by severity
+                  (Critical/Warning/Suggestion).
+                - Each finding includes title, evidence (file:line citations),
+                  reasoning, and recommended action.
+                - If body exceeds ~50KB, split into at most 5 wrapper
+                  invocations prefixed `[Audit N/M]`, ordered critical first.
+
+              Posting target:
+                - PR comment trigger (`github.event.issue.pull_request != null`)
+                  posts via:
+
+                    ./central/.github/scripts/post-claude-review.sh ${{ github.event.issue.number }} pr <<'EOF'
+                    <body>
+                    EOF
+
+                - Issue comment trigger (`github.event.issue.pull_request == null`)
+                  posts via:
+
+                    ./central/.github/scripts/post-claude-review.sh ${{ github.event.issue.number }} issue <<'EOF'
+                    <body>
+                    EOF
+
+              Budget caps:
+                - Max files read total: 18 (Phase 1: 6, Phase 2: 12)
+                - Max comment chunks: 5
+                - Hard timeout: ${{ inputs.timeout_minutes }} min (workflow-level)
+
             Across all modes:
-            * Read AGENTS.md once (at `pr-head/${{ inputs.agents_md_path }}`)
-              for the operative discipline. If that file does not exist,
-              proceed without it — do not invent contents.
+            * For PR-triggered modes, read AGENTS.md once (at
+              `pr-head/${{ inputs.agents_md_path }}`) for the operative
+              discipline. For non-PR issue audit, read
+              `${{ inputs.agents_md_path }}` at the repository root. If that
+              file does not exist, proceed without it — do not invent contents.
             * Focus on AI-authored-code failure modes (hallucinated refs,
               silent fallbacks, speculative scaffolding, stale docs, magic
               values) over style.
             * Available shell tools:
-              - `gh pr view ${{ github.event.issue.number }} --comments`
+              - For PR triggers, `gh pr view ${{ github.event.issue.number }} --comments`
                 to see existing CodeRabbit / Codex findings and avoid
                 duplicating them.
-              - `gh pr diff ${{ github.event.issue.number }}` to inspect
-                the diff if needed.
-              - `./central/.github/scripts/post-claude-review.sh <pr-number>`
-                — the ONLY way to post your final review (see below).
+              - For PR triggers, `gh pr diff ${{ github.event.issue.number }}`
+                to inspect the diff if needed.
+              - `./central/.github/scripts/post-claude-review.sh <number> [pr|issue]`
+                — the ONLY way to post your final review or audit (see below).
               You do NOT have access to test runners (pytest, schema
               validators, etc.) or to `gh pr comment` directly; when the
               PR description names verifications, judge whether they are
               plausible and specific without trying to execute them.
-            * When done, post your review as a single top-level PR comment
-              by piping the body into the wrapper script via a QUOTED
-              heredoc. The single quotes around `'EOF'` are required —
-              they prevent bash from expanding $(...), $var, or backticks
-              in your review text before the wrapper sees it:
+            * For PR-triggered modes other than audit, post your review as a
+              single top-level PR comment by piping the body into the wrapper
+              script via a QUOTED heredoc. The single quotes around `'EOF'`
+              are required — they prevent bash from expanding $(...), $var, or
+              backticks in your review text before the wrapper sees it:
 
-                  ./central/.github/scripts/post-claude-review.sh ${{ github.event.issue.number }} <<'EOF'
+                  ./central/.github/scripts/post-claude-review.sh ${{ github.event.issue.number }} pr <<'EOF'
                   <your review body here, multi-line OK>
                   EOF
 
-              Post exactly one comment. Do not post inline comments. Do
-              not modify code. Do not attempt to use `gh pr comment`
-              directly — it is not in the allowlist.
+              Post exactly one comment unless audit split-output rules apply.
+              Do not post inline comments. Do not modify code. Do not attempt
+              to use `gh pr comment` or `gh issue comment` directly — they are
+              not in the allowlist.
