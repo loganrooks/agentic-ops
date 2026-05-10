@@ -43,13 +43,17 @@ reviews:
         The wrapper that closes Comment-and-Control attacks (SECURITY.md
         TC-1, TC-2). The shape is non-negotiable:
 
-        * Accepts ONE positional argument: an integer-validated PR number.
+        * Accepts one required positional argument: an integer-validated
+          PR/issue number.
+        * Accepts one optional positional argument: the fixed surface enum
+          `pr` or `issue` (default: `pr`).
         * Reads the comment body from STDIN ONLY (forwarded as `--body-file -`).
         * Refuses `--body-file <path>`, `--body "..."`, and any other gh flag.
 
         Flag any change that adds a flag, accepts a body argument, or
-        widens the input shape. The `set -euo pipefail` and integer regex
-        guards are load-bearing — flag their removal or weakening.
+        widens the input shape beyond integer + optional `pr|issue`. The
+        `set -euo pipefail`, integer regex guard, and fixed surface enum are
+        load-bearing — flag their removal or weakening.
 
     - path: '.github/scripts/test-dispatcher.sh'
       instructions: |-

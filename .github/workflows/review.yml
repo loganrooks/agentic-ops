@@ -117,7 +117,9 @@ jobs:
     # Trusted-actor + trigger-phrase gate. This is the central
     # enforcement point. Callers SHOULD also gate at their job level
     # (cheap short-circuit before invoking workflow_call), but security
-    # does not depend on that — this gate is the contract.
+    # does not depend on that — this gate is the contract. The audit
+    # branch includes one literal newline string so `@claude audit`
+    # followed by details on later lines reaches the dispatcher.
     if: |
       github.event_name == 'issue_comment' &&
       startsWith(github.event.comment.body, '@claude ') &&
@@ -126,6 +128,8 @@ jobs:
         github.event.issue.pull_request != null ||
         github.event.comment.body == '@claude audit' ||
         startsWith(github.event.comment.body, '@claude audit ') ||
+        startsWith(github.event.comment.body, '@claude audit
+      ') ||
         startsWith(github.event.comment.body, '@claude audit:')
       )
     runs-on: ubuntu-latest
