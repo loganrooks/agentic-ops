@@ -167,9 +167,9 @@ The full text inserted by P2-T4. This is the critical content artifact of the ph
     - DO NOT post per-zone.
 
   PHASE 3 — Cross-zone integrity.
-  Read pr-head/${{ inputs.agents_md_path }} and any ADRs at
-  pr-head/.planning/decisions/ADR-*.md or pr-head/docs/adr/ADR-*.md.
-  Identify:
+  Read pr-head/${{ inputs.agents_md_path }} plus up to 5 ADRs from
+  pr-head/.planning/decisions/ADR-*.md or pr-head/docs/adr/ADR-*.md
+  (6 files total). Identify:
     - ADR violations introduced by this diff (cite ADR# + line)
     - Vocabulary drift between writer (e.g., template generator)
       and reader (e.g., parser) within the diff
@@ -181,7 +181,7 @@ The full text inserted by P2-T4. This is the critical content artifact of the ph
   see existing CodeRabbit / Codex / Claude findings. Dedupe yours
   against theirs (skip findings already raised; note dupes briefly).
   Order findings: P1 first, then P2, then P3. Within each priority,
-  group by zone. Prepend a metadata footer (illustrative — the agent
+  group by zone. Prepend a metadata header (illustrative — the agent
   outputs this verbatim wrapped in triple-backticks in the comment):
 
       Mode: survey | Model: claude-sonnet-4-6
@@ -197,8 +197,8 @@ The full text inserted by P2-T4. This is the critical content artifact of the ph
 
   Budget caps:
     - Max files read in Phase 2: 6 per zone × 8 zones = 48 max
-    - Max files read in Phase 3: 6 (AGENTS.md + ADRs)
-    - Hard timeout: 45 min (workflow-level)
+    - Max files read in Phase 3: 6 (AGENTS.md + up to 5 ADRs)
+    - Hard timeout: ${{ inputs.timeout_minutes }} min (workflow-level)
 ````
 
 ## References
