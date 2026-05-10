@@ -26,19 +26,17 @@
 
 ## Tasks
 
-### P2-T0 — Fix pre-existing `central/` path bug in `review.yml`
+### P2-T0 — SUPERSEDED (false-positive)
 
-A pre-existing bug surfaced during P1.5 review: `review.yml` references the wrapper script as `./central/.github/scripts/post-claude-review.sh` (in the `--allowedTools` allowlist around line 244, plus two prompt-instruction blocks around lines 326 and 338), but the actual script is at `./.github/scripts/post-claude-review.sh`. The reusable workflow's checkout puts agentic-ops at the workspace root — there is no `central/` subdirectory. The mistake means any mode that actually invokes the wrapper (e.g., to post a review comment) would fail at the allowlist check or `Bash` step. P2 is the first phase that touches the prompt and allowlist surfaces, so the fix lands here.
+**Status: superseded 2026-05-09T19:25:00Z. DO NOT EXECUTE.**
 
-- **Precondition:** entered P2; on branch `feat/p2-survey-mode`
-- **Action:** Replace all three occurrences of `./central/.github/scripts/post-claude-review.sh` (and the variant `central/.github/scripts/post-claude-review.sh` without the leading `./`) in `.github/workflows/review.yml` with `./.github/scripts/post-claude-review.sh`. Verify with `grep -n "central/" .github/workflows/review.yml` returning zero hits.
-- **Action (cont'd):** Run `actionlint` to confirm the workflow still parses, and run the dispatcher smoke test to confirm no regression.
-- **Postcondition:** zero `central/` references remain in `review.yml`; `actionlint` and `test-dispatcher.sh` pass.
-- **Estimated time:** 5 min
+P1.5 CodeRabbit Round 3 flagged `./central/.github/scripts/post-claude-review.sh` as a path bug, and that finding was added here as P2-T0. On 2026-05-09T19:18:36Z, Codex's `/goal` session-resume verification proved the finding wrong: `review.yml` lines 144-151 explicitly check out `loganrooks/agentic-ops` at `path: central` in the runner workspace (it is a reusable workflow; the caller's repo is at workspace root, agentic-ops is the centralized substrate at `central/`, and the PR head is at `pr-head/`). The wrapper allowlist `Bash(./central/.github/scripts/post-claude-review.sh:*)` and the prompt references at lines ~326 and ~338 are correct relative to that layout. Replacing `central/` with `./` would point the allowlist at the caller repo's root in consumer repos, where no wrapper script exists — that would break the wrapper invocation entirely and weaken the wrapper-discipline security boundary, not fix it.
+
+Codex correctly escalated rather than executing the false-positive fix. See `.planning/auto-execution/escalations/ESCALATION-2026-05-09T19:18:36Z.md` for the resolution. P2 starts at T1.
 
 ### P2-T1 — Read existing dispatcher state
 
-- **Precondition:** P2-T0 complete; on branch `feat/p2-survey-mode`
+- **Precondition:** entered P2; on branch `feat/p2-survey-mode`
 - **Action:** Read `.github/workflows/review.yml` lines 162-193 (mode dispatcher) and 273-311 (mode-behavior block); identify exact insertion points for new mode case + new behavior section.
 - **Postcondition:** Agent has memorized line numbers and insertion patterns; recorded in STATE.md `notes` field.
 - **Estimated time:** 5 min
@@ -124,7 +122,7 @@ A pre-existing bug surfaced during P1.5 review: `review.yml` references the wrap
 
 ## Phase total estimate
 
-~1.5 hours, 12 tasks (T0..T11), ~1 session.
+~1.5 hours, 11 executable tasks (T1..T11; T0 superseded), ~1 session.
 
 ## Survey mode-behavior prompt template
 
@@ -169,9 +167,9 @@ The full text inserted by P2-T4. This is the critical content artifact of the ph
     - DO NOT post per-zone.
 
   PHASE 3 — Cross-zone integrity.
-  Read pr-head/${{ inputs.agents_md_path }} and any ADRs at
-  pr-head/.planning/decisions/ADR-*.md or pr-head/docs/adr/ADR-*.md.
-  Identify:
+  Read pr-head/${{ inputs.agents_md_path }} plus up to 5 ADRs from
+  pr-head/.planning/decisions/ADR-*.md or pr-head/docs/adr/ADR-*.md
+  (6 files total). Identify:
     - ADR violations introduced by this diff (cite ADR# + line)
     - Vocabulary drift between writer (e.g., template generator)
       and reader (e.g., parser) within the diff
@@ -183,7 +181,7 @@ The full text inserted by P2-T4. This is the critical content artifact of the ph
   see existing CodeRabbit / Codex / Claude findings. Dedupe yours
   against theirs (skip findings already raised; note dupes briefly).
   Order findings: P1 first, then P2, then P3. Within each priority,
-  group by zone. Prepend a metadata footer (illustrative — the agent
+  group by zone. Prepend a metadata header (illustrative — the agent
   outputs this verbatim wrapped in triple-backticks in the comment):
 
       Mode: survey | Model: claude-sonnet-4-6
@@ -199,8 +197,8 @@ The full text inserted by P2-T4. This is the critical content artifact of the ph
 
   Budget caps:
     - Max files read in Phase 2: 6 per zone × 8 zones = 48 max
-    - Max files read in Phase 3: 6 (AGENTS.md + ADRs)
-    - Hard timeout: 45 min (workflow-level)
+    - Max files read in Phase 3: 6 (AGENTS.md + up to 5 ADRs)
+    - Hard timeout: ${{ inputs.timeout_minutes }} min (workflow-level)
 ````
 
 ## References

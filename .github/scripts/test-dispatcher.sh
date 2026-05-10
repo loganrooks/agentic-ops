@@ -26,6 +26,7 @@ dispatch() {
     "@claude quick"|"@claude quick "*)   echo "quick";  return 0 ;;
     "@claude gates"|"@claude gates "*)   echo "gates";  return 0 ;;
     "@claude review"|"@claude review "*) echo "review"; return 0 ;;
+    "@claude survey"|"@claude survey "*) echo "survey"; return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -70,6 +71,8 @@ assert "gates bare"           "gates"  "@claude gates"
 assert "gates with text"      "gates"  "@claude gates check the new fallback branches"
 assert "opus bare"            "opus"   "@claude opus"
 assert "opus with text"       "opus"   "@claude opus check cli vs config"
+assert "survey bare"          "survey" "@claude survey"
+assert "survey with text"     "survey" "@claude survey map this large PR"
 
 # ----- Word-boundary cases (must reject prefix-only matches) -----
 assert "reviewing prefix"     ""       "@claude reviewing my code"
@@ -77,6 +80,7 @@ assert "gatesomething prefix" ""       "@claude gatesomething"
 assert "deeper prefix"        ""       "@claude deeper"
 assert "opuscar prefix"       ""       "@claude opuscar"
 assert "quickly prefix"       ""       "@claude quickly look"
+assert "surveying prefix"     ""       "@claude surveying this PR"
 
 # ----- Other negative cases -----
 assert "no @claude"           ""       "please review this"
