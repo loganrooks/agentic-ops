@@ -258,12 +258,16 @@ are load-bearing in practice.
 **Current leaning:** piecemeal as need surfaces. Premature commitment
 to a phase shape before lived experience is exactly what ADR-006
 explicitly avoids. The internal-scale operation should surface
-which constraints actually bind; THAT signal will determine whether a
-spike or full-stack phase is the right shape.
+which constraints actually bind — *which sizes and sequences the
+work, not which TC class is optional*. ADR-007's TC-7..TC-11 are all
+mandatory before external rollout regardless of which shape OQ-11
+resolves into; the empirical signal determines order, effort, and
+deliverable granularity, not inclusion.
 
 **Constraint:** any resolution must respect ADR-006's trigger
 conditions and ADR-007's mitigation requirements. The shape of the
-work is open; the gates on starting it are not.
+work is open; the gates on starting it (and the threat classes that
+must be covered before external rollout) are not.
 
 ---
 

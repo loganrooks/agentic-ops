@@ -67,17 +67,31 @@ Mitigation requirements (must be in place before wide deployment):
    fails fast on violation with a clear error.
 2. The `extra_allowed_tools` deny-list is enforced at runtime by the
    `Assemble allowlist` step, not discipline-only. The deny-list MUST
-   cover ADR-004's full Forbidden-entries table, not a sampled subset.
-   At minimum, that includes: test runners (`pytest`, `jest`, `vitest`,
-   `mocha`, `npm test`, `cargo test`, `go test`), installers (`pip
-   install`, `npm install`, `yarn`, `cargo install`, `apt`, `brew`),
-   build tools (`cargo build`, `npm build`, `tsc` with emit, `cmake`,
-   `make`), network fetchers (`curl`, `wget`, `http`), and direct
-   code-execution interpreters (`python`, `node`, `ruby`, `sh`, `bash`).
+   cover ADR-004's Forbidden-entries table to the extent possible
+   with literal-string matching: test runners (`pytest`, `jest`,
+   `vitest`, `mocha`, `npm test`, `cargo test`, `go test`), installers
+   (`pip install`, `npm install`, `yarn`, `cargo install`, `apt`,
+   `brew`), build tools (`cargo build`, `npm build`, `cmake`, `make`),
+   network fetchers (`curl`, `wget`, `http`), and direct code-execution
+   interpreters (`python`, `node`, `ruby`, `sh`, `bash`).
+
+   Explicit deny-list exclusion: **`tsc` cannot be reduced to a
+   literal-string match.** ADR-004 allows `tsc` only with `--noEmit`
+   (static-analysis posture) and forbids `tsc` with emit (build-tool
+   posture); a literal string deny-list cannot distinguish the two
+   forms, so deny-listing `tsc` would block the allowed P7 TypeScript
+   onboarding (`Bash(tsc:*)`) and not deny-listing it allows the
+   forbidden emitting form. `tsc` therefore remains discipline-only
+   per ADR-004 even at wide deployment, OR a future ADR introduces a
+   command/flag-aware validator for this specific tool. The deny-list
+   does not need to cover `tsc` as a precondition; the broader
+   forbidden categories above remain literal-string matchable.
+
    ADR-004 §"Regex-validate ... Rejected" remains in force for
-   *complex* validation, but a literal-string deny-list of the
-   categories already enumerated in ADR-004 does not have ADR-004's
-   false-positive problem.
+   *complex* validation. The literal-string deny-list above does not
+   have ADR-004's false-positive problem precisely because it stops at
+   the matchable categories and explicitly excludes the ambiguous
+   `tsc` case.
 3. JSON inputs (`audit_lens_registry`, `enabled_modes`) are
    `jq`-validated for structure before interpolation into the prompt
    or dispatcher.
@@ -104,12 +118,17 @@ at `workflow_call` resolution time; a compromised account that can
 force-push `v1` overwrites a signed tag with an unsigned or
 adversary-signed one and consumers silently pick it up):
 
-1. **Tag protection rule** on `v1` in the repository settings (admin-
-   only push, no force-push by automation, mandatory review for any
-   tag update). This is the primary defense — it prevents the
-   force-push that signing alone cannot detect on the consumer side.
-   GitHub's "Tag protection rules" feature is the operative
-   mechanism.
+1. **Tag ruleset** targeting `v1` (and any other floating release
+   tags) in the repository's Rulesets configuration, per current
+   GitHub docs at
+   https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets
+   (the older "Tag protection rules" feature has been superseded by
+   rulesets). The ruleset MUST enable: "Restrict updates" (only
+   bypass actors named in the ruleset can push to `v1`), "Restrict
+   deletions," and "Block force pushes." Bypass-actor allowlist is
+   the maintainer's account only. This is the primary defense — it
+   prevents the force-push that signing alone cannot detect on the
+   consumer side.
 2. `v1` tag is signed (`git tag -s`, GPG/SSH) as a forensic-trail
    defense. Signature presence is checked by maintainer tooling
    (release runbook) on each bump; mismatched or unsigned tags are an
@@ -138,23 +157,52 @@ or social engineering.
 
 Mitigation requirements:
 1. Public-facing onboarding documentation explicitly names the
-   canonical repository URL and warns against forks.
-2. The central workflow includes a runtime self-check: at job start,
-   read `github.workflow_ref`, parse the repository portion, fail
-   the run if it's not `loganrooks/agentic-ops` (modulo explicit
-   allowlisted forks). This catches the case where a consumer
-   accidentally points at a fork — the fork would have to actively
-   strip the self-check to be useful, raising the bar. **MUST**, not
-   SHOULD: documentation alone is insufficient against
-   copy-paste/typosquatting at wide-deployment scale.
+   canonical repository URL and warns against forks. MUST.
+2. Identity verification of the called workflow. Note the mechanism
+   constraint: in a reusable workflow called via `workflow_call`,
+   the `github` context (including `github.workflow_ref` and
+   `github.workflow`) is associated with the **caller**, not the
+   called workflow, per
+   https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#github-context
+   — so parsing `github.workflow_ref` from inside the called
+   workflow would see the consumer's stub path, not
+   `loganrooks/agentic-ops`, and would either reject every legitimate
+   consumer or be useless. The mitigation that actually works:
+
+   (a) **Consumer-side SHA pinning** for wide-deployment consumers
+       (`uses: loganrooks/agentic-ops/.github/workflows/review.yml@<commit-sha>`
+       instead of `@v1`). The pin itself is the verification; an
+       attacker's fork URL doesn't resolve to the canonical SHA.
+       Onboarding documentation MUST present SHA pinning as the
+       recommended pattern for wide deployment, with the `@v1`
+       floating-tag pattern explicitly deprecated to "internal
+       consumers only." This shifts some burden to consumers but is
+       the only mechanism that bounds fork-substitution at the
+       `uses:` resolution layer.
+
+   (b) **Marker-file check on the `central/` checkout** as a
+       defense-in-depth layer that catches the consumer who used `@v1`
+       anyway. The central workflow already checks out
+       `loganrooks/agentic-ops` at `path: central` (review.yml ~lines
+       145-150). After that checkout, read a known-good identity
+       marker file (e.g., `central/.identity-marker` with a
+       repository-bound SHA-256 sum of a published manifest) and
+       fail the run if the marker is missing or mismatched. This is
+       strippable by a sophisticated fork (the attacker controls the
+       called workflow file and can simply remove the marker check),
+       but raises the bar against casual copy-paste typosquatting.
+
+   Both (a) and (b) ship together for wide deployment. Neither alone
+   is sufficient; (a) only protects consumers who actually pin SHAs,
+   (b) only protects against forks too lazy to strip the marker.
 
   Prerequisite: an org-rename runbook exists in operational runbooks
-  before the self-check is enabled. The runbook covers the one known
-  footgun (renaming `loganrooks` would brick all consumers until the
-  allowlist is updated) — operational procedure: stage the rename
-  with a PR that adds the new org name to the self-check allowlist,
-  merge, bump `v1`, then perform the rename. The self-check ships
-  WITH the runbook, not without it.
+  before mitigation (b) is enabled. The runbook covers the one known
+  footgun (renaming `loganrooks` would brick all consumers using
+  hard-coded canonical-repo checks until the marker is updated) —
+  operational procedure: stage the rename with a PR that adds the
+  new identity marker, merge, bump `v1`, then perform the rename.
+  Mitigation (b) ships WITH the runbook, not without it.
 
 ### TC-10 — Shared-credential blast radius (REQUIRED FOR WIDE)
 
