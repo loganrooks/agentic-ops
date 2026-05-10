@@ -19,8 +19,8 @@ in `OPEN_QUESTIONS.md`:
   any substrate that violates Anthropic's Pro/Max OAuth ToS (third-party
   OAuth clients) is off the table.
 
-The proximate forcing function (per `INITIATIVE.md`) is review of CBM PR
-#1; the strategic frame is reuse across `loganrooks/prix-guesser`,
+The proximate forcing function (per `INITIATIVE.md`) is review of
+CBM PR `#1`; the strategic frame is reuse across `loganrooks/prix-guesser`,
 `arxiv-sanity-mcp`, `f1-modeling`, `epistemic-agency`, `scholardoc`. P7
 ("Onboard 5 repos") fans the substrate out to those targets.
 
@@ -57,8 +57,12 @@ Concretely:
 2. **Consumer cap.** The substrate is operated for at most the six
    internal consumers listed in P7 (`cbm`, `prix-guesser`,
    `arxiv-sanity-mcp`, `f1-modeling`, `epistemic-agency`, `scholardoc`).
-   Onboarding a seventh consumer requires either (a) it being internal
-   to `loganrooks/*`, or (b) OQ-1 resolving toward product first.
+   Onboarding a seventh consumer — *internal or external* — requires a
+   later ADR superseding this one with explicit reasoning. The cap is
+   not relaxed by `loganrooks/*` namespace membership alone; the point
+   of the cap is to force the conversation about maintenance load
+   before scope expands, and that conversation is needed for any
+   seventh consumer regardless of provenance.
 
 3. **No installer for external use.** Install mechanism for the six
    internal consumers may be a `gh` extension, a coded scaffolder, or

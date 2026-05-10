@@ -65,22 +65,31 @@ Mitigation requirements (must be in place before wide deployment):
 1. The central workflow validates every workflow_call input against a
    schema (input shape, type, enum membership where applicable) and
    fails fast on violation with a clear error.
-2. The `extra_allowed_tools` deny-list (forbidden literal strings:
-   `pytest`, `curl`, `wget`, `npm test`, `cargo test`, etc.) is
-   enforced at runtime by the `Assemble allowlist` step, not
-   discipline-only. ADR-004 §"Regex-validate ... Rejected" remains in
-   force for *complex* validation, but a literal-string deny-list of
-   known-forbidden categories does not have ADR-004's false-positive
-   problem.
+2. The `extra_allowed_tools` deny-list is enforced at runtime by the
+   `Assemble allowlist` step, not discipline-only. The deny-list MUST
+   cover ADR-004's full Forbidden-entries table, not a sampled subset.
+   At minimum, that includes: test runners (`pytest`, `jest`, `vitest`,
+   `mocha`, `npm test`, `cargo test`, `go test`), installers (`pip
+   install`, `npm install`, `yarn`, `cargo install`, `apt`, `brew`),
+   build tools (`cargo build`, `npm build`, `tsc` with emit, `cmake`,
+   `make`), network fetchers (`curl`, `wget`, `http`), and direct
+   code-execution interpreters (`python`, `node`, `ruby`, `sh`, `bash`).
+   ADR-004 §"Regex-validate ... Rejected" remains in force for
+   *complex* validation, but a literal-string deny-list of the
+   categories already enumerated in ADR-004 does not have ADR-004's
+   false-positive problem.
 3. JSON inputs (`audit_lens_registry`, `enabled_modes`) are
    `jq`-validated for structure before interpolation into the prompt
    or dispatcher.
 
 Note: dispatcher-level input handling (CRLF tolerance, first-line
-length cap, bidi/control unicode filtering) was hardened in a
-bounded-scope follow-up commit; that work is orthogonal to TC-7 and
-remains a precondition only for the schema/deny-list/json-validation
-items above.
+length cap, bidi/control unicode filtering) was hardened in commit
+`af0b2f2` (PR #6, `fix(dispatcher): harden against CRLF / length /
+bidi unicode in triggers`), which landed in bounded scope as a
+suggestion-severity fix. That commit addresses *trigger comment*
+parsing; it is orthogonal to TC-7's *workflow_call input* validation
+and remains a precondition only for the schema/deny-list/json-
+validation items above.
 
 ### TC-8 — Supply-chain attacks on the central repository (REQUIRED FOR WIDE)
 
@@ -89,18 +98,36 @@ maintainer-machine compromise, or social-engineering a malicious PR
 through review) and pushes a malicious commit that consumers
 automatically pick up via the floating `@v1` tag.
 
-Mitigation requirements:
-1. `v1` tag is signed (`git tag -s`, GPG/SSH).
-2. CodeRabbit is required (already enforced by branch protection per
+Mitigation requirements (defense-in-depth — signing alone is
+insufficient because GitHub Actions does not verify tag signatures
+at `workflow_call` resolution time; a compromised account that can
+force-push `v1` overwrites a signed tag with an unsigned or
+adversary-signed one and consumers silently pick it up):
+
+1. **Tag protection rule** on `v1` in the repository settings (admin-
+   only push, no force-push by automation, mandatory review for any
+   tag update). This is the primary defense — it prevents the
+   force-push that signing alone cannot detect on the consumer side.
+   GitHub's "Tag protection rules" feature is the operative
+   mechanism.
+2. `v1` tag is signed (`git tag -s`, GPG/SSH) as a forensic-trail
+   defense. Signature presence is checked by maintainer tooling
+   (release runbook) on each bump; mismatched or unsigned tags are an
+   incident signal. Consumer-side verification is not assumed — see
+   the floating-tag/SHA-pinning tradeoff under Consequences below.
+3. CodeRabbit is required (already enforced by branch protection per
    AGENTS.md) AND a second human reviewer is required for any change
    to: `.github/workflows/review.yml`, `.github/scripts/`, or any
    ADR-001/004/006/007/etc.
-3. `v1` tag updates only happen after CI green AND human review AND
+4. `v1` tag updates only happen after CI green AND human review AND
    a 24-hour cooldown ("delayed-update window") during which any
    consumer can pin to a specific SHA if they want to opt out of an
    imminent v1 bump.
-4. Optional: a `v1-stable` and `v1-canary` split (canary moves on each
-   merge, stable moves on a clock or after canary is exercised).
+5. `v1-stable` and `v1-canary` split (canary moves on each merge,
+   stable moves on a clock or after canary is exercised without
+   incident). Originally listed as optional; promoted to required at
+   wide deployment because the per-consumer canary surface is the
+   only mitigation that bounds blast radius when (1)-(4) all fail.
 
 ### TC-9 — Fork-substitution / typosquatting (REQUIRED FOR WIDE)
 
@@ -117,13 +144,17 @@ Mitigation requirements:
    the run if it's not `loganrooks/agentic-ops` (modulo explicit
    allowlisted forks). This catches the case where a consumer
    accidentally points at a fork — the fork would have to actively
-   strip the self-check to be useful, raising the bar.
+   strip the self-check to be useful, raising the bar. **MUST**, not
+   SHOULD: documentation alone is insufficient against
+   copy-paste/typosquatting at wide-deployment scale.
 
-  Caveat: this self-check has a footgun in the org-rename scenario
-  (renaming `loganrooks` would brick all consumers until the
-  allowlist is updated). Mitigation: define an org-rename runbook
-  before enabling the self-check; the self-check itself is SHOULD,
-  not MUST, until that runbook exists.
+  Prerequisite: an org-rename runbook exists in operational runbooks
+  before the self-check is enabled. The runbook covers the one known
+  footgun (renaming `loganrooks` would brick all consumers until the
+  allowlist is updated) — operational procedure: stage the rename
+  with a PR that adds the new org name to the self-check allowlist,
+  merge, bump `v1`, then perform the rename. The self-check ships
+  WITH the runbook, not without it.
 
 ### TC-10 — Shared-credential blast radius (REQUIRED FOR WIDE)
 
@@ -150,12 +181,30 @@ an AGENTS.md that prompt-injects the audit agent into producing
 misleading findings or exfiltrating substrate-side context (e.g., the
 audit_lens_registry JSON that the consumer didn't override).
 
-Note: TC-3 partially covers this for PR-comment content. TC-11
-extends it to repo-content-as-prompt-context, which is qualitatively
-different (PR comment is one line; AGENTS.md can be 1000+ lines of
-attacker-controlled prose).
+Note on bounded-scope coverage: TC-3 already covers PR-head
+AGENTS.md as prompt-injection surface at bounded scope. The current
+mitigation chain (narrow allowlist + trusted-actor commenter gate +
+wrapper-script discipline) bounds the worst case to "agent posts a
+weird PR comment" even when AGENTS.md is attacker-controlled — for
+example when an external contributor PRs a malicious AGENTS.md to one
+of the six internal consumers and a trusted maintainer triggers
+review/survey/audit. That is TC-3's job, and TC-3's mitigations are
+deemed sufficient at bounded scope because the principal is one
+maintainer who trusts the consumers and the consumers' contributors
+are gated by repo-level review of PRs that change AGENTS.md.
 
-Mitigation requirements:
+TC-11 names the **wide-scope ratchet**: external consumers maintain
+their own AGENTS.md outside the central principal's trust boundary,
+and the attacker surface grows from "trusted contributor's PR to a
+known consumer" to "any consumer-repo content at any commit the
+consumer's `@v1` happens to reach." At that point the markers
+(mitigation #1 below) move from "nice to have on top of TC-3" to
+"hard requirement," because TC-3's mitigation chain alone no longer
+bounds the worst case to a single weird comment when consumer
+configuration and consumer content are both attacker-controllable.
+
+Mitigation requirements (for wide deployment only — bounded scope
+relies on TC-3):
 1. Repo content read for audit/survey context is wrapped in
    "untrusted content" markers in the prompt (similar to the
    existing `>>>BEGIN_COMMENT ... >>>END_COMMENT` pattern), with
@@ -225,6 +274,16 @@ intent is "minimum bar," not "exhaustive list."
   cost: a 24-hour cooldown between v1 promotion and consumer pickup
   slows down hot fixes. Acceptable for wide-deployment scale; would
   be friction in current bounded scope.
+- TC-8 carries an unresolved tension between the floating-tag
+  contract (per ADR-003: consumers pin `@v1` and pick up additive
+  changes automatically) and signed-tag verification (only effective
+  if consumers verify the signature, which they do not under the
+  floating-tag model). Tag protection rule + delayed-update window +
+  canary split are the substitute defenses, but a residually-risk-
+  averse consumer at wide scope may want to pin a specific SHA
+  instead of `@v1`. Documentation will need to name this as an
+  available trade-off when wide deployment is authorized, even
+  though it changes ADR-003's update-propagation model.
 
 **Neutral.**
 - TC-1..TC-6 are unchanged and remain the canonical threat model
