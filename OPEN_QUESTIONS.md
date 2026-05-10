@@ -233,6 +233,44 @@ documentation in advance of process needs.
 
 ---
 
+## OQ-11 — Wide-deployment readiness shape
+
+**Question:** When OQ-1 resolves toward "open-source product," what is
+the shape of the readiness work? A single spike phase, a full-stack
+readiness phase, or piecemeal as need surfaces?
+
+**Deferred:** until OQ-1 resolves. The shape can't be sized
+meaningfully before the empirical signal from internal-scale operation
+(P7 onboarding of 5 internal repos + P8 observability) tells us which
+TC-7..TC-11 mitigations from `docs/adr/ADR-007-threat-model-gating.md`
+are load-bearing in practice.
+
+**What would resolve:**
+- (spike phase) we want concrete artifacts (auth-model comparison,
+  prototype deny-list, draft onboarding docs) before committing to
+  the shape — early but bounded research
+- (full-stack readiness phase) all TC-7..TC-11 mitigations plus
+  auth-model ADR plus installer all designed and shipped together as
+  one coherent unit — high commitment, high coherence
+- (piecemeal) each constraint addressed as it becomes a blocker; no
+  pre-committed phase shape — lowest commitment, highest drift risk
+
+**Current leaning:** piecemeal as need surfaces. Premature commitment
+to a phase shape before lived experience is exactly what ADR-006
+explicitly avoids. The internal-scale operation should surface
+which constraints actually bind — *which sizes and sequences the
+work, not which TC class is optional*. ADR-007's TC-7..TC-11 are all
+mandatory before external rollout regardless of which shape OQ-11
+resolves into; the empirical signal determines order, effort, and
+deliverable granularity, not inclusion.
+
+**Constraint:** any resolution must respect ADR-006's trigger
+conditions and ADR-007's mitigation requirements. The shape of the
+work is open; the gates on starting it (and the threat classes that
+must be covered before external rollout) are not.
+
+---
+
 ## How this list evolves
 
 - New questions go here as they emerge.
