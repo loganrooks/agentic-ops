@@ -4,7 +4,7 @@ name: Claude PR Review (centralized)
 #
 # Centralized concerns (owned here):
 #   * trusted-actor + trigger-phrase gate
-#   * mode dispatcher (review / quick / deep / gates / opus)
+#   * mode dispatcher (review / quick / deep / gates / opus / survey)
 #   * claude-code-action invocation + allowedTools allowlist
 #   * the post-comment wrapper script (closes Comment-and-Control)
 #   * concurrency group, timeout, permissions
@@ -29,7 +29,7 @@ name: Claude PR Review (centralized)
 #     review:
 #       uses: loganrooks/agentic-ops/.github/workflows/review.yml@v1
 #       with:
-#         enabled_modes: '["review","quick","deep","opus"]'
+#         enabled_modes: '["review","quick","deep","opus","survey"]'
 #         review_focus_paths: |
 #           src/important.py
 #       secrets:
@@ -41,11 +41,11 @@ on:
       enabled_modes:
         description: |-
           JSON array of mode names this repo supports, drawn from the
-          central registry: review, quick, deep, gates, opus. Modes not
+          central registry: review, quick, deep, gates, opus, survey. Modes not
           listed are rejected at dispatch with an explanatory error.
         required: false
         type: string
-        default: '["review","quick","deep","opus"]'
+        default: '["review","quick","deep","opus","survey"]'
       review_focus_paths:
         description: |-
           Newline-separated paths or globs to prioritize in 'review' mode.
@@ -179,6 +179,7 @@ jobs:
             "@claude quick"|"@claude quick "*)   mode=quick;  model=claude-sonnet-4-6 ;;
             "@claude gates"|"@claude gates "*)   mode=gates;  model=claude-sonnet-4-6 ;;
             "@claude review"|"@claude review "*) mode=review; model=claude-sonnet-4-6 ;;
+            "@claude survey"|"@claude survey "*) mode=survey; model=claude-sonnet-4-6 ;;
             *) echo "First line did not match an allowed trigger phrase: '$cmd'" >&2; exit 1 ;;
           esac
           # Validate against this consumer's enabled_modes JSON array.
@@ -309,6 +310,87 @@ jobs:
               Output high-confidence findings only — terse over verbose.
               Skip anything Sonnet would also catch; this mode is for
               things that need Opus-level reasoning to be reliably surfaced.
+            * survey: spatial-decomposition review for large PRs (>50 files
+              or >5K changed lines). Single-agent path (L1) — Phase 1-4
+              sequential.
+
+              PHASE 1 — Zone map.
+              Run `gh pr diff ${{ github.event.issue.number }} --name-only`
+              to list changed files. Run
+              `gh pr diff ${{ github.event.issue.number }} --stat` to size
+              them. Build internally a list of 3-8 zones, each with: (a)
+              zone-id (kebab-case), (b) path globs covered, (c) suspected
+              concern category (auth/contract/scaffolding/docs/test/infra/data),
+              (d) priority (P1/P2/P3) based on apparent load-bearing-ness.
+              Cap zones at 8. DO NOT post yet.
+
+              PHASE 2 — Per-zone deep read.
+              For each P1 then P2 zone, in turn:
+                - Read at most 6 files within that zone (prefer most-changed
+                  files per the --stat output).
+                - Pattern-match for AI-failure modes specific to the zone's
+                  category:
+                    auth zones → secret leaks, missing input validation,
+                                 hardcoded credentials, weak crypto choices
+                    contract zones → reader/writer field-name mismatch,
+                                     schema drift, breaking API changes
+                    scaffolding zones → declared-but-unused symbols, code
+                                        paths with no test coverage,
+                                        speculative abstractions
+                    docs zones → claims that contradict code, stale
+                                 references, forgotten TODO/FIXME, outdated
+                                 examples
+                    test zones → tests asserting on absent code, fragile
+                                  mocks, bare-except swallowing, flaky timing
+                    infra zones → unpinned deps, missing timeouts, broad shell
+                                   injection, missing concurrency guards
+                    data zones → missing migration backwards-compat, unindexed
+                                  queries on hot path, schema-vs-validation
+                                  drift
+                - Note findings inline in scratchpad with: file:line,
+                  severity (critical/warning/suggestion), one-sentence
+                  concern.
+                - DO NOT post per-zone.
+
+              PHASE 3 — Cross-zone integrity.
+              Read pr-head/${{ inputs.agents_md_path }} and any ADRs at
+              pr-head/.planning/decisions/ADR-*.md or
+              pr-head/docs/adr/ADR-*.md. Identify:
+                - ADR violations introduced by this diff (cite ADR# + line)
+                - Vocabulary drift between writer (e.g., template generator)
+                  and reader (e.g., parser) within the diff
+                - Gate-script changes whose downstream readers were not
+                  updated
+                - Hook-enforced commitments (per AGENTS.md) violated by the
+                  diff
+
+              PHASE 4 — Synthesis + post.
+              Run `gh pr view ${{ github.event.issue.number }} --comments` to
+              see existing CodeRabbit / Codex / Claude findings. Dedupe yours
+              against theirs (skip findings already raised; note dupes
+              briefly). Order findings: P1 first, then P2, then P3. Within
+              each priority, group by zone. Prepend a metadata footer
+              (illustrative — output this verbatim wrapped in triple-backticks
+              in the comment):
+
+                  Mode: survey | Model: claude-sonnet-4-6
+                  Zones: <count> | Files read: <count>
+                  Runtime: <approx-seconds>s | Run: <run_url>
+
+              Post ONE comment via the wrapper script:
+
+                  ./central/.github/scripts/post-claude-review.sh ${{ github.event.issue.number }} <<'EOF'
+                  <body>
+                  EOF
+
+              If body exceeds ~50KB, prioritize critical/warning over
+              suggestion; cap and add a "[truncated; N more findings omitted]"
+              note.
+
+              Budget caps:
+                - Max files read in Phase 2: 6 per zone × 8 zones = 48 max
+                - Max files read in Phase 3: 6 (AGENTS.md + ADRs)
+                - Hard timeout: 45 min (workflow-level)
 
             Across all modes:
             * Read AGENTS.md once (at `pr-head/${{ inputs.agents_md_path }}`)
