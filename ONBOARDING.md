@@ -8,8 +8,7 @@ This document covers adding a caller stub to a repo so that it consumes
 the `agentic-ops` kernel workflow via the floating `v1` tag.
 
 The consumer set is bounded by
-[ADR-006](docs/adr/ADR-006-bounded-deployment-scope.md) and
-[ADR-009](docs/adr/ADR-009-consumer-cap-relaxation.md): an internal
+[ADR-006](docs/adr/ADR-006-bounded-deployment-scope.md): an internal
 named set under single-principal plan-auth. **External use is out of
 scope per ADR-006 §3.** No installer, marketplace path, or fork
 recipe (ADR-006 §5). Adding a consumer beyond the named set
@@ -35,10 +34,11 @@ The target consumer repo must have all four before onboarding can begin:
 
 ## The minimal caller stub
 
-The canonical source is [`.github/workflows/review.yml`](.github/workflows/review.yml)
-header (currently lines 18–36 in this repo). If that header changes,
-it is authoritative; the snippet below is a reading aid. The working
-reference instance is CBM's caller stub
+The canonical source is the `Consumer caller stub` block in the
+header comment of
+[`.github/workflows/review.yml`](.github/workflows/review.yml).
+If that header changes, it is authoritative; the snippet below is
+a reading aid. The working reference instance is CBM's caller stub
 ([`loganrooks/codebase-mapper`](https://github.com/loganrooks/codebase-mapper)
 at SHA `f6fe379` as of 2026-05-11).
 
@@ -73,7 +73,9 @@ Per-repo customizable inputs (defaults in `.github/workflows/review.yml`):
   `Bash(ruff:*),Bash(mypy:*)`). Per
   [ADR-004](docs/adr/ADR-004-allowlist-policy.md), no test
   runners, installers, build tools, network fetchers, or
-  code-execution surfaces.
+  code-execution surfaces. Compile-capable tools must be pinned
+  to non-emitting invocations (e.g. `tsc --noEmit`, not bare
+  `tsc:*`); see ADR-004 §"Forbidden entries".
 - `agents_md_path` — default `AGENTS.md`; missing file tolerated.
 - `repo_label` — default `github.event.repository.name`.
 
@@ -104,12 +106,23 @@ Values for the named consumers are tabled in
    human-friendly name (e.g. `loganrooks/cbm` →
    `repo_label: codebase-mapper`).
 4. **`enabled_modes` selection.** Use the P7 table for the named
-   consumers. New consumers should start with a conservative
-   subset (`["review","quick","deep"]`) and expand based on
-   maintainer judgment.
+   consumers, with one normalization: audit-mode entries in
+   `enabled_modes` must be bare `audit`, not `audit:<lens>`. The
+   dispatcher (`.github/workflows/review.yml`) sets `mode=audit`
+   for any `@claude audit:...` trigger and validates `mode`
+   against `enabled_modes`, so lens-prefixed entries fail
+   dispatch. Lens selection happens at trigger time via the
+   `audit_target` argument, not at enable time. New consumers
+   should start with a conservative subset
+   (`["review","quick","deep"]`) and expand based on maintainer
+   judgment.
 5. **`review_focus_paths`, `extra_allowed_tools`.** Use the P7
    table; values reflect the consumer's contract surfaces and
-   static-analysis stack.
+   static-analysis stack. Review each `extra_allowed_tools` entry
+   against [ADR-004](docs/adr/ADR-004-allowlist-policy.md) — in
+   particular, compile-capable tools (e.g., `tsc`, `cargo`,
+   `tsc:*` wildcards) must be pinned to non-emitting invocations
+   only.
 
 ## Per-repo agent brief
 
@@ -119,9 +132,12 @@ fresh-context agent must include all of the following:
 - **Target repo URL** (`https://github.com/loganrooks/<repo>`).
 - **Configuration row** from
   [`.planning/phases/P7-onboarding.md`](.planning/phases/P7-onboarding.md)
-  §"Per-repo configuration": `enabled_modes`,
-  `review_focus_paths`, `extra_allowed_tools`, `agents_md_path`,
-  `repo_label`.
+  §"Per-repo configuration". The P7 table has four columns —
+  `Repo`, `enabled_modes`, `review_focus_paths`,
+  `extra_allowed_tools`. `agents_md_path` and `repo_label` are
+  not table-provided; they use the workflow defaults (`AGENTS.md`
+  and `github.event.repository.name` respectively) unless the
+  customization checklist above identified a per-repo override.
 - **Branch name**: `feat/agentic-ops-onboarding` in the target
   repo.
 - **PR title**: `chore: onboard to agentic-ops centralized review`
@@ -153,10 +169,19 @@ fresh-context agent must include all of the following:
 ## Smoke test
 
 After the onboarding PR merges, validate the wiring with a benign
-`@claude review` comment on a tiny doc-only PR or an existing
-issue thread in the target repo. Do not smoke-test on a real
-review-bearing PR — that conflates first-run validation with
-substantive review output. Per P7-T<n>-5 §"Notes."
+trigger in the target repo:
+
+- **For `review` mode** — use a tiny doc-only PR. The dispatcher's
+  `if:` clause restricts non-audit modes to PR contexts
+  (`github.event.issue.pull_request != null`), so `@claude review`
+  on a plain issue won't fire.
+- **For `audit` mode** — a plain issue thread is acceptable
+  (`audit` is the one mode the dispatcher's `if:` allows on
+  non-PR comments).
+
+Do not smoke-test on a real review-bearing PR — that conflates
+first-run validation with substantive review output. Per
+P7-T<n>-5 §"Notes."
 
 A successful smoke test means: workflow fires, Claude posts a
 short comment via `post-claude-review.sh`, no `allowedTools`
@@ -189,11 +214,9 @@ denials in the run log, total wall-clock under the
   `extra_allowed_tools` policy
 - [ADR-006](docs/adr/ADR-006-bounded-deployment-scope.md) —
   bounded deployment scope
-- [ADR-009](docs/adr/ADR-009-consumer-cap-relaxation.md) —
-  partial supersession of ADR-006 §2 *(merged after this doc;
-  until merged the cap is six per ADR-006 §2)*
 - [`.github/workflows/review.yml`](.github/workflows/review.yml)
-  header — canonical caller-stub exemplar (lines 18–36)
+  header — canonical caller-stub exemplar (the `Consumer caller
+  stub` block in the header comment)
 - [`.planning/phases/P7-onboarding.md`](.planning/phases/P7-onboarding.md)
   — per-repo configuration table, full P7 task graph
 - [`.planning/HUMAN-GATES.md`](.planning/HUMAN-GATES.md) —
