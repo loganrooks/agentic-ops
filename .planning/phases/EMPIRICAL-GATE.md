@@ -19,12 +19,16 @@ or remain pending without affecting the others.
 
 ## Procedure (autonomous)
 
-The procedure has two stages. Stage 1 (L1 baseline capture) was
-completed during T1-T6 and is recorded in the decision file. Stage
-2 (hand-rolled L1-vs-L3 comparison per family) is the work that
-remains.
+The procedure has two stages. Stage 1 (L1 baseline capture) is
+mostly complete: three of five baselines were captured in T1-T6
+and recorded in the decision file; two `audit-all` lens runs
+(`audit:tech-debt`, `audit:discipline`) remain. Stage 2
+(hand-rolled L1-vs-L3 comparison per family) proceeds per family
+once its required Stage 1 baselines are complete: the
+survey-matrix and audit-matrix comparisons can start now;
+audit-all waits on the two remaining L1 lens runs.
 
-### Stage 1 — L1 baseline capture (complete)
+### Stage 1 — L1 baseline capture (mostly complete)
 
 The L1 baselines for `survey`, `audit:agential-dx`, and
 `audit:forward-compat` are captured in the decision file
