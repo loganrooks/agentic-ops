@@ -4,13 +4,21 @@
 
 ## Status
 
-Early. Scope captured, kernel design agreed, no implementation yet. The first
-working version will be an extracted PR review orchestrator from
-`loganrooks/codebase-mapper`.
+L1 review substrate (review / quick / deep / gates / opus / survey / audit
+modes per [ADR-001](docs/adr/ADR-001-mode-taxonomy.md)) is merged on
+`loganrooks/agentic-ops` `main` and exposed via the floating
+[`v1`](https://github.com/loganrooks/agentic-ops/releases/tag/v1) tag
+([ADR-003](docs/adr/ADR-003-versioning-and-release.md)). One consumer is
+live: `loganrooks/codebase-mapper` via its caller stub.
 
-This repo currently holds the project's vision, roadmap, and open questions.
-Implementation lands once the security hardening for the source workflow ships
-in `codebase-mapper` (PR #5).
+L3 matrix-fan-out variants (`survey-matrix`, `audit-matrix`, `audit-all`)
+are specified in [ADR-008](docs/adr/ADR-008-l3-mode-variants.md) and
+gate-pending per-family empirical comparison; not implemented.
+
+Deployment scope is bounded to internal consumers per
+[ADR-006](docs/adr/ADR-006-bounded-deployment-scope.md). External use of
+the public repo is permitted under Apache-2.0 but no external-onboarding
+path is offered.
 
 ## What this is
 
@@ -64,19 +72,30 @@ codebase. This is the missing piece.
   concrete phases.
 - [OPEN_QUESTIONS.md](./OPEN_QUESTIONS.md) — explicit deferrals, tradeoffs
   not yet resolved, and the criteria that would resolve each one.
-- [docs/adr/](./docs/adr/) — architecture decisions as they land within
-  this project (currently empty; the project itself is too young to have
-  internal decisions yet).
+- [docs/adr/](./docs/adr/) — architecture decisions
+  (ADRs 001-008 cover mode taxonomy, parallelism architecture, versioning,
+  allowlist policy, audit output format, bounded deployment scope,
+  threat-model gating, and L3 mode variants).
+- [AGENTS.md](./AGENTS.md) — operative discipline for contributors
+  (human or agentic).
+- [SECURITY.md](./SECURITY.md) — threat model and reporting.
 
 ## Who this is for
 
-Initially, the [loganrooks/](https://github.com/loganrooks) repos:
+Six internal consumers per
+[ADR-006](docs/adr/ADR-006-bounded-deployment-scope.md):
 [codebase-mapper](https://github.com/loganrooks/codebase-mapper),
 prix-guesser, arxiv-sanity-mcp, f1-modeling, epistemic-agency, scholardoc.
+ADR-006 caps the consumer set at six; relaxing the cap requires a
+superseding ADR.
 
-Whether this expands beyond personal tooling to a public-facing product is
-deferred (see [OPEN_QUESTIONS.md](./OPEN_QUESTIONS.md)).
+External use of the public repo is permitted under Apache-2.0 but no
+support commitment is offered and no external-onboarding path is
+documented per ADR-006. Forks consumed externally are the forker's
+responsibility. Whether scope expands beyond six internal consumers is
+gated on ADR-006 supersession; see
+[OPEN_QUESTIONS.md](./OPEN_QUESTIONS.md) OQ-1 and OQ-11.
 
 ## License
 
-TBD. Not yet relevant — no code to license.
+Apache License 2.0 — see [LICENSE](./LICENSE).

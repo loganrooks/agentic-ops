@@ -10,13 +10,28 @@ remain unresolved indefinitely; that's fine.
 
 ## OQ-1 — Personal tooling vs open-source product
 
+**Status:** still deferred. The license question that was conflated
+with this OQ has been resolved separately — LICENSE is Apache-2.0
+(in fact has been since the P1 merge, commit `3f5d05a`); the README
+previously misstated this as "TBD." That is a factual sync, not an
+OQ-1 resolution. OQ-1 itself — whether the substrate is a
+public-facing product with a maintenance commitment — remains
+deferred per [ADR-006](docs/adr/ADR-006-bounded-deployment-scope.md),
+which explicitly rejected resolving OQ-1 prematurely and bounded
+the substrate to six internal consumers until the ADR-006 trigger
+conditions are met.
+
 **Question:** Is `agentic-ops` something the user maintains for their
 own repos, or a public-facing product with maintenance commitment to
 external users?
 
 **Deferred:** until the M-phase work is complete and the user has
 lived with the system long enough to know what's actually load-bearing
-vs. accidental.
+vs. accidental. ADR-006 §"Trigger conditions for revisiting" gates
+*resolution toward "open-source product"* on all three (OQ-1 signal
+conditions met, ADR-007 prerequisites met, new auth model ADR
+accepted); resolution toward "personal tooling" remains unconditional
+because it merely confirms the existing ADR-006 posture.
 
 **What would resolve:**
 - (toward product) external interest emerges organically (issues,
@@ -27,8 +42,12 @@ vs. accidental.
   feels heavy enough that supporting strangers' edge cases would tip
   into untenable
 
-**Current leaning:** personal-tooling-in-public-repo. License TBD; no
-support commitments offered. If demand emerges, revisit.
+**Current leaning:** personal-tooling-in-public-repo bounded to six
+internal consumers per ADR-006. License is Apache-2.0; no support
+commitments offered. Forks consumed externally are the forker's
+responsibility per ADR-006. If demand emerges, OQ-1 revisits through
+ADR-006-supersession work — not through a unilateral resolution
+here.
 
 ---
 
