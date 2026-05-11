@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/mail-common.sh
+source "$SCRIPT_DIR/lib/mail-common.sh"
+
+workspace="$PWD"
+role=""
+emit_as_context="false"
+peek="false"
+include_expired="false"
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --workspace) workspace="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --as | --recipient) role="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --emit-as-context) emit_as_context="true"; shift ;;
+    --peek) peek="true"; shift ;;
+    --include-expired) include_expired="true"; shift ;;
+    -h | --help)
+      printf 'usage: mail-inbox --as ROLE [--peek|--emit-as-context] [--include-expired]\n'
+      exit 0
+      ;;
+    *) usage_error "unknown argument $1" ;;
+  esac
+done
+
+[ -n "$role" ] || usage_error "--as is required"
+role_is_valid "$role" || usage_error "invalid role: $role"
+if [ "$peek" = "true" ] && [ "$emit_as_context" = "true" ]; then
+  usage_error "--peek and --emit-as-context are mutually exclusive"
+fi
+
+workspace="$(workspace_path "$workspace")"
+ensure_role_dirs "$workspace"
+inbox_dir="$workspace/.mail/$role/inbox"
+processed_dir="$workspace/.mail/$role/processed"
+
+if [ "$peek" != "true" ]; then
+  shopt -s nullglob
+  processed_files=("$processed_dir"/*.md)
+  if [ "${#processed_files[@]}" -gt 0 ]; then
+    for processed_file in "${processed_files[@]}"; do
+      expires_at="$(frontmatter_value "$processed_file" expires_at)"
+      if is_past_iso_utc "$expires_at"; then
+        thread_id="$(frontmatter_value "$processed_file" thread_id)"
+        [ -n "$thread_id" ] || thread_id="unknown-thread"
+        archive_key="$(safe_archive_key "$thread_id")"
+        archive_dir="$workspace/.mail/$role/archive/$archive_key"
+        archive_target="$archive_dir/$(basename "$processed_file")"
+        mkdir -p "$archive_dir"
+        [ ! -e "$archive_target" ] || error_exit "archive-file-collision: $archive_target"
+        mv "$processed_file" "$archive_target"
+      fi
+    done
+  fi
+fi
+
+shopt -s nullglob
+files=("$inbox_dir"/*.md)
+if [ "${#files[@]}" -gt 0 ]; then
+  sorted_files=()
+  while IFS= read -r sorted_file; do
+    sorted_files+=("$sorted_file")
+  done < <(printf '%s\n' "${files[@]}" | sort)
+  files=("${sorted_files[@]}")
+fi
+
+[ "${#files[@]}" -gt 0 ] || exit 0
+
+for file in "${files[@]}"; do
+  protocol_version="$(frontmatter_value "$file" protocol_version)"
+  expires_at="$(frontmatter_value "$file" expires_at)"
+  thread_id="$(frontmatter_value "$file" thread_id)"
+  expired="false"
+  protocol_skew="false"
+  if is_past_iso_utc "$expires_at"; then
+    expired="true"
+  fi
+  if [ "$protocol_version" != "$PROTOCOL_VERSION" ]; then
+    protocol_skew="true"
+  fi
+
+  if [ "$expired" = "true" ] && [ "$include_expired" != "true" ]; then
+    should_print="false"
+  else
+    should_print="true"
+  fi
+
+  emit_file="$file"
+  if [ "$peek" != "true" ]; then
+    processed_file="$processed_dir/$(basename "$file")"
+    [ ! -e "$processed_file" ] || error_exit "processed-file-collision: $processed_file"
+    if [ "$expired" = "true" ]; then
+      [ -n "$thread_id" ] || thread_id="unknown-thread"
+      archive_key="$(safe_archive_key "$thread_id")"
+      archive_dir="$workspace/.mail/$role/archive/$archive_key"
+      archive_target="$archive_dir/$(basename "$processed_file")"
+      mkdir -p "$archive_dir"
+      [ ! -e "$archive_target" ] || error_exit "archive-file-collision: $archive_target"
+    fi
+
+    mv "$file" "$processed_file"
+    emit_file="$processed_file"
+    if [ "$expired" = "true" ]; then
+      mv "$processed_file" "$archive_target"
+      emit_file="$archive_target"
+    fi
+  fi
+
+  if [ "$should_print" = "true" ]; then
+    if [ "$emit_as_context" = "true" ]; then
+      printf 'BEGIN PEER-AGENT MESSAGE\n'
+      if [ "$protocol_skew" = "true" ]; then
+        printf '[PROTOCOL-SKEW]\n'
+      fi
+      if [ "$expired" = "true" ]; then
+        printf '[EXPIRED]\n'
+      fi
+      cat "$emit_file"
+      printf '\nEND PEER-AGENT MESSAGE\n'
+    else
+      if [ "$protocol_skew" = "true" ]; then
+        printf '[PROTOCOL-SKEW] '
+      fi
+      if [ "$expired" = "true" ]; then
+        printf '[EXPIRED] '
+      fi
+      cat "$emit_file"
+      printf '\n'
+    fi
+  fi
+done
