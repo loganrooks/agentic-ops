@@ -4,9 +4,11 @@
 
 ## Status
 
-L1 review substrate (review / quick / deep / opus / survey / audit modes) is
-merged on `loganrooks/agentic-ops` `main` and exposed via the floating `v1`
-tag (`v1` currently resolves to `7a73fa9`, the P4 merge). One consumer is
+L1 review substrate (review / quick / deep / gates / opus / survey / audit
+modes per [ADR-001](docs/adr/ADR-001-mode-taxonomy.md)) is merged on
+`loganrooks/agentic-ops` `main` and exposed via the floating
+[`v1`](https://github.com/loganrooks/agentic-ops/releases/tag/v1) tag
+([ADR-003](docs/adr/ADR-003-versioning-and-release.md)). One consumer is
 live: `loganrooks/codebase-mapper` via its caller stub.
 
 L3 matrix-fan-out variants (`survey-matrix`, `audit-matrix`, `audit-all`)

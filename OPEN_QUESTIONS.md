@@ -27,9 +27,11 @@ external users?
 
 **Deferred:** until the M-phase work is complete and the user has
 lived with the system long enough to know what's actually load-bearing
-vs. accidental. ADR-006 specifies the trigger conditions for
-revisiting (all three required): OQ-1 signal conditions met,
-ADR-007 prerequisites met, new auth model ADR accepted.
+vs. accidental. ADR-006 §"Trigger conditions for revisiting" gates
+*resolution toward "open-source product"* on all three (OQ-1 signal
+conditions met, ADR-007 prerequisites met, new auth model ADR
+accepted); resolution toward "personal tooling" remains unconditional
+because it merely confirms the existing ADR-006 posture.
 
 **What would resolve:**
 - (toward product) external interest emerges organically (issues,
