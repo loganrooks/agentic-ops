@@ -36,9 +36,11 @@
 
 - Add three new jobs alongside the existing `review` job: `survey-zone-map`, `survey-zone-review` (matrix), `survey-synthesis`.
 - Gate the three new jobs on `mode == survey-matrix` (explicit-mode gate; no size threshold).
+- **Gate the existing `review` job to exclude `mode == survey-matrix`** so a `@claude survey-matrix` trigger does NOT also fire the L1 claude-code-action. Add `if: <mode-resolution-output> != 'survey-matrix'` (or equivalent) to the `review` job's step that runs `claude-code-action`.
 - Wire `needs:` so zone-review depends on zone-map and synthesis depends on both.
+- **Synthesis job must survive partial worker failures.** Use `if: always() && needs.survey-zone-map.result == 'success'` on the synthesis job and inspect `needs.survey-zone-review.result` inside the synthesis prompt/payload to note degraded mode. Otherwise GHA's default behavior (`needs:` job skips on dependency failure) will leave a half-finished run with no comment posted.
 - Verify conditionals skip cleanly on any other mode (`review`, `quick`, `deep`, `gates`, `opus`, `survey` L1, `audit`, etc.).
-- Time: ~60 min (substantial GHA refactor).
+- Time: ~75 min (substantial GHA refactor + degraded-mode plumbing).
 
 ### P5-T3 — Implement zone-map job
 

@@ -4,8 +4,13 @@ Status: accepted
 Date: 2026-05-11
 
 Amends [ADR-001](ADR-001-mode-taxonomy.md) (mode taxonomy extended with
-three matrix-variant modes) and [ADR-002](ADR-002-parallelism-architecture.md)
-(L3 routing refined from threshold-based to explicit-trigger).
+three matrix-variant modes — additive). Partially supersedes
+[ADR-002](ADR-002-parallelism-architecture.md) re: L3 routing
+(threshold-based dispatch withdrawn in favor of explicit triggers; the
+L1→L3 ladder and L2 rejection in ADR-002 remain in force). Also
+amends [ADR-005](ADR-005-audit-output-format.md) re: comment metadata
+footer (extends the `Mode:` enum to include the three new modes; see
+Decision §5 below).
 
 ## Context
 
@@ -210,6 +215,34 @@ variant adds value. Deferred: no `deep` consumer has reported binding
 on attention budget, and `deep` is rarely invoked. Add `deep-matrix`
 only if EMPIRICAL-GATE-style evidence emerges that `deep` binds.
 
+### 5. ADR-005 metadata footer `Mode:` enum extended
+
+[ADR-005](ADR-005-audit-output-format.md) defines a metadata footer
+on every audit/survey comment that downstream tooling (M2's
+weekly-health aggregator) parses. The current footer's `Mode:` field
+is constrained to the enum `audit|survey`. The three new L3 modes
+need recognizable footer values so the aggregator can distinguish L1
+from L3 outputs.
+
+If a mode family ships per Decision §2's reservation, that mode's
+synthesizer output uses one of:
+
+```
+Mode: survey-matrix | Lens: n/a | Model: <model-id>
+Mode: audit-matrix  | Lens: <id-or-"free-form"> | Model: <model-id>
+Mode: audit-all     | Lens: n/a | Model: <model-id>
+```
+
+The `Lens:` field stays present for footer-format stability;
+`survey-matrix` and `audit-all` use `n/a` because there is no single
+lens. All other ADR-005 footer fields (Files read, Directories
+traversed, Runtime, Commit SHA, Run) are unchanged.
+
+ADR-005's status is updated to `accepted (provisional); amended by
+ADR-008 (extends Mode footer enum)`. The provisional state is
+preserved because ADR-005's broader contract may still change as M2
+develops the aggregator.
+
 ## Alternatives considered
 
 **Threshold-based auto-routing (ADR-002 original proposal).** Rejected
@@ -297,16 +330,61 @@ more of:
   reveals genuine ambiguity, where L1's single-perspective output
   hides it.
 
-…at a cost ratio of ≤Nx tokens for ≥0.5N improvement in any of the
-above. (Cost ratio is approximate; the exact factor depends on
-synthesizer model choice and per-mode N. The point is: L3 doesn't
-have to break even on every dimension, but the integrated improvement
-must be commensurate with the cost.)
+…at a cost ratio bounded per mode against a recorded L1 baseline:
 
-If the comparison shows none of those gains, P5 and P6 are *skipped*
-(not deferred); the modes are not added; this ADR's Decision §2 is
-narrowed in a follow-up ADR. The skip decision is itself an artifact
-worth preserving — null results matter.
+- **Baseline:** the L1 run for the same mode on the same target
+  (e.g., for `survey-matrix` evaluation, the canonical L1 baseline is
+  a `@claude survey` run on the same PR). Token usage, file count,
+  finding count, and runtime are captured.
+- **N (fan-out factor):** worker count for the L3 run —
+  `survey-matrix`: zone count from the planner output;
+  `audit-matrix`: sub-question count (target 3–6);
+  `audit-all`: built-in lens count (currently 4). N is recorded
+  alongside baseline.
+- **Token ratio:** `L3_total_tokens / L1_baseline_tokens`. Includes
+  planner + workers + synthesizer for L3.
+- **Improvement threshold:** at least one of the four named dimensions
+  must improve by an amount predeclared per dimension in the gate
+  artifact: coverage gain → ≥20% more files read with non-trivial
+  content; calibration improvement → ≥1 severity correction or new
+  high-severity finding L1 missed; finding-class addition → ≥1
+  finding in a class L1's output structurally cannot reach; ensemble
+  disagreement → ≥1 productive disagreement surfaced that L1 hid.
+- **Acceptable cost ratio:** L3 tokens ≤ N × L1 tokens (i.e., the
+  parallel-budget premium). Exceeding this requires the improvement
+  dimensions to scale proportionally; the gate artifact must justify
+  the higher ratio.
+
+The numerical thresholds are starting values; they may be loosened or
+tightened in a follow-up ADR if the first comparison shows them
+mis-calibrated. The point is: L3 need not win every dimension, but
+the gate decision must be made against a *recorded* baseline and a
+*predeclared* threshold, not against post-hoc judgment.
+
+**The EMPIRICAL-GATE comparison is hand-rolled, not gated on
+implementation.** The chicken-and-egg risk — "we can't run the L3
+comparison without implementing L3, but we can't implement L3 without
+the comparison" — is resolved as follows: the L1-vs-L3 comparison
+that gates P5/P6 is performed by manually orchestrating multiple L1
+triggers and assembling the L3-shaped output offline. For
+`survey-matrix`, this means firing multiple narrower `@claude review`
+or `@claude survey` triggers scoped to each zone (or running L1
+`@claude survey` once and re-analyzing the zone-by-zone output
+quality with an offline synthesizer prompt). For `audit-matrix` and
+`audit-all`, multiple `@claude audit:<lens>` triggers can be combined
+manually. The hand-rolled L3 is imperfect (no in-workflow parallel
+budget, manual synthesis) but sufficient to detect the four
+improvement dimensions. Only after the comparison clears for a mode
+family does that family's P5/P6 work begin.
+
+If the comparison shows none of those gains for a mode family, that
+family's reserved mode(s) are *skipped* (not deferred); the mode
+name(s) are not added to the taxonomy; this ADR's Decision §2 is
+narrowed in a follow-up ADR for that family. **Skipping is
+per-family** — a null result for `survey-matrix` does not skip
+`audit-matrix` or `audit-all`, and vice versa; each mode family
+clears or fails on its own evidence. Each skip decision is itself an
+artifact worth preserving; null results matter.
 
 ## Consequences
 

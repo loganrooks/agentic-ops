@@ -1,6 +1,6 @@
 # ADR-005: Audit and survey output format
 
-Status: accepted (provisional)
+Status: accepted (provisional); amended by ADR-008 (extends `Mode:` footer enum to include `survey-matrix`, `audit-matrix`, `audit-all`)
 Date: 2026-05-08
 
 ## Context

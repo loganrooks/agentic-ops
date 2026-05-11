@@ -71,20 +71,22 @@ Structurally similar to P5 (T1..T12). Differences from P5:
 
 ### P6-T3 — Implement plan jobs (two jobs)
 
-- **`audit-matrix-plan`:** claude-sonnet-4-6 with a prompt that decomposes `audit_target` (built-in lens or free-form) into sub-questions. Emit JSON via `outputs.sub_questions`.
-- **`audit-all-plan`:** claude-sonnet-4-6 (or a simple shell expansion — no model strictly required if the lens registry is static) emitting the four built-in lens entries verbatim. Emit JSON via `outputs.lenses`.
+- **`audit-matrix-plan`:** claude-sonnet-4-6 with a prompt that decomposes `audit_target` (built-in lens or free-form) into sub-questions. Emit JSON via `outputs.sub_questions`. **Validate each `sub-question-id` against an ASCII-slug pattern** (`^[a-z][a-z0-9-]{0,40}$`) and **enforce uniqueness** before the matrix step expands; reject the plan output and fail the job on slash, newline, dot, or duplicate ids. This prevents artifact-name collisions or path-traversal from prompt-injected planner output.
+- **`audit-all-plan`:** enumerate the effective lens registry from the `audit_lens_registry` workflow input (defaults to ADR-001's four built-in lenses but is overridable per-repo). If a repo registers additional lenses, `audit-all` picks them up automatically — this preserves ADR-008 Decision §3's "additive lens registry" property. Free-form ad hoc targets are NOT enumerated; for those use `audit-matrix <free-form>` instead. Same slug-pattern + uniqueness validation as above applies to `lens-id`.
 
 ### P6-T4 — Implement matrix worker jobs (two jobs)
 
 - **`audit-matrix-worker`:** `strategy.matrix.sub_question` reads from `audit-matrix-plan` output. Each entry runs claude-sonnet-4-6 with the sub-question's prompt narrowed by `focus-paths` if provided.
 - **`audit-all-worker`:** `strategy.matrix.lens` reads from `audit-all-plan` output. Each entry runs essentially the L1 audit prompt for that lens.
-- Both: per-entry findings written to artifact named with the entry id; `fail-fast: false`; surface per-entry token/cost in job summary.
+- Both: per-entry findings written to artifact named with the validated entry id (slug pattern enforced upstream in the planner; double-check on consume); `fail-fast: false`; surface per-entry token/cost in job summary.
+- **Worker `allowedTools` is artifact-only.** Do NOT include `post-claude-review.sh` in the worker `claude_args` allowlist. Workers may have static-analysis tools (`Bash(rg:*)`, `Bash(ruff:*)`, etc., per ADR-004 and the consumer's `extra_allowed_tools`) and must write findings to disk for the synthesizer to pick up — they must NOT post comments directly. A prompt-injected worker (TC-3) cannot publish unsynthesized findings if the wrapper isn't in its allowlist. Only the two synthesis jobs include `post-claude-review.sh` in their allowlists.
 
 ### P6-T5 — Implement Opus synthesis jobs (two jobs)
 
 - **`audit-matrix-synthesis`:** download per-sub-question artifacts; feed to claude-opus-4-7 with a within-lens reconciliation prompt. Output is one cohesive lens-level report.
 - **`audit-all-synthesis`:** download per-lens artifacts; feed to claude-opus-4-7 with a cross-lens reasoning prompt. Output is grouped by lens with cross-lens clusters surfaced.
-- Both: dedup vs CodeRabbit/Codex; apply ADR-005 multi-comment split when output exceeds threshold; post via the existing wrapper.
+- Both: dedup vs CodeRabbit/Codex; apply ADR-005 multi-comment split when output exceeds threshold; post via `post-claude-review.sh` (synthesis jobs are the ONLY jobs in either pipeline that have the wrapper in their allowlist; see P6-T4).
+- **Synthesis must survive partial worker failures.** Use `if: always() && needs.<plan-job>.result == 'success'` on both synthesizer jobs; inspect `needs.<worker-job>.result` in the synthesis payload and note degraded mode in the output if some workers failed. Without `always()`, a single matrix worker failure cascades to skip the synthesizer and lose all completed workers' findings.
 
 ### P6-T6 — Update prompt templates per worker shape
 
@@ -99,14 +101,16 @@ Structurally similar to P5 (T1..T12). Differences from P5:
 - **Across-lens synthesis prompt** (for `audit-all-synthesis`): cross-lens reasoning. Surface clusters (e.g., "tech-debt findings cluster in the same module that forward-compat flags as a Phase B blocker"), contradictions, and priority ranking.
 - Both: dedup directive against CodeRabbit/Codex; output conforms to ADR-005; include a token-budget hint.
 
-### P6-T8 — Add audit-matrix and audit-all dispatcher cases
+### P6-T8 — Add audit-matrix and audit-all dispatcher cases + widen issue-comment gate
 
-- `@claude audit-matrix:<lens>` → `mode=audit-matrix, audit_target=<lens>`, then plan job decomposes into sub-questions
-- `@claude audit-matrix <free-form>` → `mode=audit-matrix, audit_target=<free-form>`, plan job derives sub-questions from free-form text
-- `@claude audit-all` → `mode=audit-all`, plan job enumerates built-in lenses (no audit_target)
-- Bare `@claude audit` and `@claude audit:<lens>` → unchanged (L1 `audit` mode)
-- Add `audit-matrix` and `audit-all` to `enabled_modes` validation logic so consumers must opt in by listing each mode separately; the default `enabled_modes` is *not* extended (cost discipline per ADR-008 Decision §2)
-- Do NOT edit ADR-001 or ADR-008 bodies; the mode contracts are already specified in ADR-008 Decision §2
+- Dispatcher cases:
+  - `@claude audit-matrix:<lens>` → `mode=audit-matrix, audit_target=<lens>`, then plan job decomposes into sub-questions
+  - `@claude audit-matrix <free-form>` → `mode=audit-matrix, audit_target=<free-form>`, plan job derives sub-questions from free-form text
+  - `@claude audit-all` → `mode=audit-all`, plan job enumerates effective lens registry (no audit_target)
+  - Bare `@claude audit` and `@claude audit:<lens>` → unchanged (L1 `audit` mode)
+- Add `audit-matrix` and `audit-all` to `enabled_modes` validation logic so consumers must opt in by listing each mode separately; the default `enabled_modes` is *not* extended (cost discipline per ADR-008 Decision §2).
+- **Widen the trusted-actor `if:` clause to admit the new L3 audit triggers on non-PR issues.** The existing P3 widening (review.yml lines 132–141) only allows non-PR issue comments for bare `@claude audit`, `@claude audit `, `@claude audit:`, and `@claude audit<newline>`. Without extending it, `@claude audit-matrix:<lens>` and `@claude audit-all` posted on a plain issue (the canonical audit-on-main path) would be rejected before reaching the dispatcher. Add equivalent branches for `audit-matrix:`, `audit-matrix `, `audit-matrix<newline>`, `audit-matrix` (bare), and `audit-all` to the issue-comment-only branch of the `if:` clause.
+- Do NOT edit ADR-001 or ADR-008 bodies; the mode contracts are already specified in ADR-008 Decision §2.
 
 ### P6-T9 — Empirical metrics capture
 
@@ -122,9 +126,9 @@ Structurally similar to P5 (T1..T12). Differences from P5:
 
 ### P6-T11 — Docs, ADR updates, CodeRabbit pass
 
-- Update README's mode table to show audit as L3
-- Cross-reference ADR-002 (parallelism) and ADR-005 (output format)
-- Run CodeRabbit; resolve every conversation; address Codex review if present
+- Update README's mode table: **add separate rows for `audit-matrix` and `audit-all` (each marked L3)**; leave the existing `audit` row marked L1. Bare `@claude audit` and `@claude audit:<lens>` remain L1; treating the existing row as L3 would teach users the wrong trigger for the L1 path.
+- Cross-reference ADR-002 (parallelism, partial-supersession of routing), ADR-005 (output format, footer enum extension), and ADR-008 (mode contracts).
+- Run CodeRabbit; resolve every conversation; address Codex review if present.
 
 ### P6-T12 — Tag, checkpoint, end-to-end validate
 

@@ -106,9 +106,9 @@ more named portions of the prior ADR but the rest stays in force.
 Example: "ADR-002 had three decisions — L1→L3 ladder, reject L2,
 threshold-based routing. ADR-NNN withdraws the routing decision but
 the other two stand." Both ADRs are canonical for their respective
-scopes, but the *amending* portion of the prior ADR is no longer
-authoritative. Readers should consult both, but treat the named
-portion of the prior ADR as historical.
+scopes, but the *named superseded portion* of the prior ADR is no
+longer authoritative. Readers should consult both, but treat the
+named portion of the prior ADR as historical.
 
 **Use `deprecates`** when the decision no longer applies and no
 replacement is needed.
