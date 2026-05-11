@@ -28,7 +28,17 @@
 | epistemic-agency | `["review","quick","deep","audit:forward-compat"]` | `src/**/*.ts`, `docs/` | `Bash(eslint:*)` |
 | scholardoc | `["review","quick","deep","survey","audit"]` | `src/**/*.py`, `docs/` | `Bash(ruff:*),Bash(mypy:*)` |
 | vigil | `["review","quick","deep","audit"]` | `""` | `""` |
-| agentic-ops | `["review","quick","deep","opus","survey","audit"]` | `.github/workflows/review.yml`, `.github/scripts/`, `docs/adr/` | `""` (see note below) |
+| agentic-ops | `["review","quick","deep","opus","survey","audit","gates"]` | `.github/workflows/review.yml`, `.github/scripts/`, `docs/adr/` | `""` (see note below) |
+
+**Note on agentic-ops `enabled_modes`.** The row reflects the full
+ADR-001 seven-mode taxonomy. `gates` is enabled but the P7 table
+has no `gates_paths` column; per the kernel workflow input
+contract (`.github/workflows/review.yml` input `gates_paths`
+description), an empty `gates_paths` causes the `gates` mode to
+post a single "not configured for this repo" comment instead of
+running — graceful degradation, not a dispatch failure.
+`@claude gates` is therefore *permitted* on agentic-ops but not
+*useful* until a follow-up populates `gates_paths`.
 
 **Note on agentic-ops `extra_allowed_tools`.** The self-consumer
 row is intentionally empty because the kernel reusable workflow
