@@ -28,7 +28,26 @@
 | epistemic-agency | `["review","quick","deep","audit:forward-compat"]` | `src/**/*.ts`, `docs/` | `Bash(eslint:*)` |
 | scholardoc | `["review","quick","deep","survey","audit"]` | `src/**/*.py`, `docs/` | `Bash(ruff:*),Bash(mypy:*)` |
 | vigil | `["review","quick","deep","audit"]` | `""` | `""` |
-| agentic-ops | `["review","quick","deep","opus","survey","audit"]` | `.github/workflows/review.yml`, `.github/scripts/`, `docs/adr/` | `""` |
+| agentic-ops | `["review","quick","deep","opus","survey","audit"]` | `.github/workflows/review.yml`, `.github/scripts/`, `docs/adr/` | `""` (see note below) |
+
+**Note on agentic-ops `extra_allowed_tools`.** The self-consumer
+row is intentionally empty because the kernel reusable workflow
+(`.github/workflows/review.yml`) does not install `actionlint`,
+`shellcheck`, or `yamllint` — these are run by agentic-ops's CI
+workflow on each PR, not by the `@claude` review path. Populating
+`extra_allowed_tools` with those entries would widen Claude's
+allowlist without making the binaries available at runtime
+(command-not-found at invocation). Self-review for agentic-ops is
+therefore intentionally limited to semantic review (Claude reads
+workflow/script/ADR files and reasons about them); deterministic
+linting stays in CI. If a future kernel-workflow change adds
+install steps for those tools, this row should be revisited.
+
+**Note on `vigil` row.** Both columns are empty pending
+maintainer-confirmed values for vigil's contract surfaces and
+static-analysis stack. The workflow defaults (`""` treats diff
+uniformly; no extra tools) are valid; the row is dispatchable
+as-is. Refine before or during P7-T<n>-3 if specifics are known.
 
 ## Per-repo subtasks (7x; n in {1..7})
 

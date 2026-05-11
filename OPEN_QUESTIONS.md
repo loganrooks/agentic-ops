@@ -50,9 +50,13 @@ because it merely confirms the existing ADR-006 posture.
 eight named internal consumers per ADR-006 §2 (as partially
 superseded by ADR-009). License is Apache-2.0; no support
 commitments offered. Forks consumed externally are the forker's
-responsibility per ADR-006. If demand emerges, OQ-1 revisits through
-ADR-006-supersession work — not through a unilateral resolution
-here.
+responsibility per ADR-006. Adding a ninth named *internal*
+consumer requires a later ADR superseding ADR-009 (the same
+named-set discipline); that is distinct from OQ-1 resolution.
+OQ-1 resolution toward "open-source product" is the stronger
+gate and requires ADR-006's three-prong supersession (OQ-1 signal
+conditions met + ADR-007 prerequisites met + new auth-model ADR
+accepted) — not a unilateral resolution here.
 
 ---
 
