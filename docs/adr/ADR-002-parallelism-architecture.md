@@ -1,6 +1,6 @@
 # ADR-002: Parallelism architecture — L1 baseline, skip L2, L3 via matrix fan-out
 
-Status: accepted
+Status: accepted; amended by ADR-008 (refines L3 routing from threshold-based to explicit-trigger)
 Date: 2026-05-08
 
 ## Context

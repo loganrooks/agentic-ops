@@ -1,6 +1,6 @@
 # ADR-001: Mode taxonomy — seven modes spanning diff, survey, and audit
 
-Status: accepted
+Status: accepted; amended by ADR-008 (adds L3 matrix-variant modes)
 Date: 2026-05-08
 
 ## Context
