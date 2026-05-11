@@ -4,13 +4,17 @@
 
 ## Status
 
-Early. Scope captured, kernel design agreed, no implementation yet. The first
-working version will be an extracted PR review orchestrator from
-`loganrooks/codebase-mapper`.
+Early but shipping. The kernel PR review substrate is live: review / quick /
+deep / opus / survey / audit modes (L1) on `loganrooks/agentic-ops`,
+consumed by `loganrooks/codebase-mapper` via the floating `v1` tag.
 
-This repo currently holds the project's vision, roadmap, and open questions.
-Implementation lands once the security hardening for the source workflow ships
-in `codebase-mapper` (PR #5).
+L3 matrix-fan-out variants (`survey-matrix`, `audit-matrix`, `audit-all`) are
+designed in [ADR-008](docs/adr/ADR-008-l3-mode-variants.md) and gate-pending
+per-family empirical comparison.
+
+Onboarding flywheel (`ONBOARDING.md` + script + worked examples) is the next
+work item. Until that lands, see [`AGENTS.md`](AGENTS.md) and the CBM caller
+stub for the working reference shape.
 
 ## What this is
 
@@ -70,13 +74,17 @@ codebase. This is the missing piece.
 
 ## Who this is for
 
-Initially, the [loganrooks/](https://github.com/loganrooks) repos:
+Primary consumers are the [loganrooks/](https://github.com/loganrooks) repos:
 [codebase-mapper](https://github.com/loganrooks/codebase-mapper),
-prix-guesser, arxiv-sanity-mcp, f1-modeling, epistemic-agency, scholardoc.
+prix-guesser, arxiv-sanity-mcp, f1-modeling, epistemic-agency, scholardoc,
+vigil, and others. Onboarding additional repos drives the design discipline.
 
-Whether this expands beyond personal tooling to a public-facing product is
-deferred (see [OPEN_QUESTIONS.md](./OPEN_QUESTIONS.md)).
+External use is welcome under the Apache-2.0 license but currently comes
+with **no support commitment**. Onboarding paths (recipe-doc, script,
+agent-executable procedure) are in progress; see [ROADMAP.md](./ROADMAP.md)
+and [OPEN_QUESTIONS.md](./OPEN_QUESTIONS.md) OQ-1 for the going-public
+posture.
 
 ## License
 
-TBD. Not yet relevant — no code to license.
+Apache License 2.0 — see [LICENSE](./LICENSE).
