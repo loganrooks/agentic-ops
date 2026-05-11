@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/mail-common.sh
+source "$SCRIPT_DIR/lib/mail-common.sh"
+
+workspace="$PWD"
+thread_id=""
+close_thread="false"
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --workspace) workspace="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --thread-id) thread_id="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --close) close_thread="true"; shift ;;
+    -h | --help)
+      printf 'usage: mail-thread [--workspace PATH] [--close] THREAD_ID\n'
+      exit 0
+      ;;
+    --*) usage_error "unknown argument $1" ;;
+    *)
+      [ -z "$thread_id" ] || usage_error "thread id specified more than once"
+      thread_id="$1"
+      shift
+      ;;
+  esac
+done
+
+[ -n "$thread_id" ] || usage_error "thread id is required"
+workspace="$(workspace_path "$workspace")"
+ensure_role_dirs "$workspace"
+
+tmp_index="$(mktemp "${TMPDIR:-/tmp}/agentic-mail-thread.XXXXXX")"
+trap 'rm -f "$tmp_index"' EXIT
+
+while IFS= read -r file; do
+  if [ "$(frontmatter_value "$file" thread_id)" = "$thread_id" ]; then
+    timestamp="$(frontmatter_value "$file" timestamp)"
+    message_id="$(frontmatter_value "$file" message_id)"
+    sender="$(frontmatter_value "$file" sender)"
+    recipient="$(frontmatter_value "$file" recipient)"
+    kind="$(frontmatter_value "$file" kind)"
+    in_reply_to="$(frontmatter_value "$file" in_reply_to)"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$timestamp" "$message_id" "$sender" "$recipient" "$kind" "$in_reply_to" "$file" >> "$tmp_index"
+  fi
+done < <(message_files "$workspace")
+
+if [ ! -s "$tmp_index" ]; then
+  printf 'No messages for thread %s\n' "$thread_id"
+  exit 0
+fi
+
+printf 'Thread %s\n' "$thread_id"
+sort "$tmp_index" | while IFS=$'\t' read -r timestamp message_id sender recipient kind in_reply_to file; do
+  prefix='-'
+  if [ -n "$in_reply_to" ] && [ "$in_reply_to" != "null" ]; then
+    prefix='  ->'
+  fi
+  printf '%s %s %s %s->%s %s %s\n' "$prefix" "$timestamp" "$message_id" "$sender" "$recipient" "$kind" "$file"
+done
+
+if [ "$close_thread" = "true" ]; then
+  safe_thread_id="$(safe_archive_key "$thread_id")"
+  close_sources=()
+  close_targets=()
+  for role in claude codex human; do
+    archive_dir="$workspace/.mail/$role/archive/$safe_thread_id"
+    mkdir -p "$archive_dir"
+    shopt -s nullglob
+    close_files=("$workspace/.mail/$role/processed"/*.md)
+    if [ "${#close_files[@]}" -eq 0 ]; then
+      continue
+    fi
+    for file in "${close_files[@]}"; do
+      case "$file" in
+        */.tmp/*) continue ;;
+      esac
+      if [ "$(frontmatter_value "$file" thread_id)" = "$thread_id" ]; then
+        archive_target="$archive_dir/$(basename "$file")"
+        [ ! -e "$archive_target" ] || error_exit "archive-file-collision: $archive_target"
+        if [ "${#close_targets[@]}" -gt 0 ]; then
+          for existing_target in "${close_targets[@]}"; do
+            [ "$existing_target" != "$archive_target" ] || error_exit "archive-file-collision: $archive_target"
+          done
+        fi
+        close_sources+=("$file")
+        close_targets+=("$archive_target")
+      fi
+    done
+  done
+  for index in "${!close_sources[@]}"; do
+    mv "${close_sources[$index]}" "${close_targets[$index]}"
+  done
+fi
