@@ -1,40 +1,43 @@
 # Phase P5 — Survey mode L3 (matrix fan-out)
 
-**Goal:** Refactor `survey` into a 3-job pattern: zone-map → matrix-per-zone → synthesis. Standard GHA fan-out via `fromJson(needs.X.outputs.Y)`. Adds an L1-vs-L3 routing input (default 100 files); below it runs L1, above runs L3.
+> **Updated 2026-05-11 to align with [ADR-008](../../docs/adr/ADR-008-l3-mode-variants.md):** Original plan added a `survey_l3_threshold` input and auto-promoted `@claude survey` to L3 above the threshold. ADR-008 Decision §1 withdraws threshold-based routing in favor of explicit triggers. P5 now ships L3 as a separate mode `survey-matrix` invoked by `@claude survey-matrix`; the L1 `survey` mode is unchanged. References to `survey_l3_threshold` and size-gated dispatch below have been rewritten accordingly.
 
-**Status:** pending (CONDITIONAL on EMPIRICAL-GATE decision; may be `skipped`)
+**Goal:** Add a new mode `survey-matrix` implemented as a 3-job pattern: zone-map → matrix-per-zone → synthesis. Standard GHA fan-out via `fromJson(needs.X.outputs.Y)`. L1 `survey` mode is unchanged and remains the default; `survey-matrix` is opt-in via explicit trigger.
+
+**Status:** pending (CONDITIONAL on EMPIRICAL-GATE per-family decision per ADR-008; may be `skipped` if the survey L1-vs-L3 comparison produces no material improvement)
 
 **Branch:** `feat/p5-survey-l3`
 
 ## Phase entry preconditions
 
-- EMPIRICAL-GATE.md (auto-execution decision file) says L3 is needed for survey
+- EMPIRICAL-GATE produces a survey L1-vs-L3 comparison that clears ADR-008's per-family improvement bar (coverage gain, calibration improvement, finding-class addition, or ensemble disagreement) at a defensible cost ratio
 - CHECKPOINT-P4 exists
 
 ## Phase exit postconditions
 
-- `review.yml` has 3-job structure for survey (active when diff exceeds threshold)
-- Matrix fan-out works correctly (validated by re-running on CBM PR #1 post-merge)
+- `review.yml` dispatcher handles `@claude survey-matrix` as a distinct mode (`mode=survey-matrix`); L1 `survey` mode is unchanged
+- `review.yml` has 3-job structure active when `mode == survey-matrix`
+- Matrix fan-out works correctly (validated by `@claude survey-matrix` on CBM PR #1 or equivalent large PR)
 - Zone-output validation script exists and runs in zone-map job
 - Failure semantics: partial-zone-failure produces degraded synthesis with note
 - CI green, **CodeRabbit reviewed + conversations resolved**, PR merged after maintainer signal, v1 tag bumped
 
 ## Tasks
 
-### P5-T1 — Design L1-vs-L3 routing
+### P5-T1 — Add `survey-matrix` dispatcher case
 
-- Define the routing rule that picks L1 vs L3 by diff size.
-- Add input `survey_l3_threshold` (default 100); above runs L3, at-or-below runs L1.
-- Wire the threshold into `if:` conditionals so non-L3 invocations short-circuit cleanly.
-- Document the routing rule in this phase doc and in `review.yml` comments. Do NOT edit ADR-002 — ADRs are immutable per `docs/adr/README.md` and `AGENTS.md`. ADR-002 already approves the L1 → L3 ladder; the threshold value and routing mechanism are implementation details, not architectural changes. If a substantive architectural change emerges (e.g., abandoning L3 in favor of a different parallelism approach), open a new ADR that supersedes ADR-002.
+- Per ADR-008 Decision §1, L3 fires on explicit triggers only. No threshold-based routing.
+- Add a dispatcher case for `@claude survey-matrix` that sets `mode=survey-matrix` and `model=claude-sonnet-4-6` (worker default; synthesizer may use Opus per ADR-008 Decision §2).
+- Add `survey-matrix` to the `enabled_modes` validation logic so consumers must opt in by listing the mode (the default `enabled_modes` is *not* extended per ADR-008).
+- L1 `survey` mode dispatcher case is unchanged.
 - Time: ~15 min.
 
 ### P5-T2 — Refactor jobs structure
 
-- Restructure `review.yml` into four jobs: `review` (non-survey + L1 survey), `survey-zone-map`, `survey-zone-review` (matrix), `survey-synthesis`.
-- Gate the three new jobs on `mode == survey AND diff_size > survey_l3_threshold`.
+- Add three new jobs alongside the existing `review` job: `survey-zone-map`, `survey-zone-review` (matrix), `survey-synthesis`.
+- Gate the three new jobs on `mode == survey-matrix` (explicit-mode gate; no size threshold).
 - Wire `needs:` so zone-review depends on zone-map and synthesis depends on both.
-- Verify conditionals skip cleanly on the L1 path or any non-survey mode.
+- Verify conditionals skip cleanly on any other mode (`review`, `quick`, `deep`, `gates`, `opus`, `survey` L1, `audit`, etc.).
 - Time: ~60 min (substantial GHA refactor).
 
 ### P5-T3 — Implement zone-map job
@@ -61,33 +64,33 @@
 - Reuse the existing exfiltration-safe `gh pr comment` wrapper for the post.
 - Time: ~45 min.
 
-### P5-T6 — Update test-dispatcher.sh for L3 routing
+### P5-T6 — Update test-dispatcher.sh for survey-matrix
 
-- Add fixtures asserting the dispatcher emits the L3 flag above threshold and L1 below it.
-- Dispatcher does not change; routing lives in per-job `if:` conditionals — fixtures verify those.
+- Add fixtures asserting the dispatcher emits `mode=survey-matrix` on `@claude survey-matrix` and `mode=survey` on `@claude survey` (no auto-promotion).
+- Add fixtures verifying `survey-matrix` is rejected when not in `enabled_modes` (per the existing override discipline).
 - Confirm existing dispatcher smoke tests stay green.
 - Land fixtures in the same commit as the refactor.
 - Time: ~15 min.
 
-### P5-T7 — Document L3 implementation details (NOT in ADR-002)
+### P5-T7 — Document L3 implementation details (NOT in ADRs)
 
-- Document 3-job structure, threshold input, partial-failure semantics, `max-parallel` choice, and zone cap in this phase doc and in `review.yml` inline comments. The phase doc is the canonical implementation-detail home.
-- **Do NOT edit ADR-002.** ADRs are immutable per `docs/adr/README.md` and `AGENTS.md`. ADR-002 already approves the L3 architecture at the design level; implementation details are not architectural changes.
-- If a substantive architectural deviation emerges (e.g., abandoning the 3-job structure for a different shape, or rejecting matrix fan-out entirely), STOP and open a new ADR that supersedes ADR-002. Do not edit ADR-002 in place.
+- Document 3-job structure, partial-failure semantics, `max-parallel` choice, and zone cap in this phase doc and in `review.yml` inline comments. The phase doc is the canonical implementation-detail home.
+- **Do NOT edit ADR-002 or ADR-008 bodies.** ADRs are immutable per `docs/adr/README.md` and `AGENTS.md`; only `Status:` lines may be updated, and only to reflect amend/supersede/deprecate relationships per the README convention.
+- If a substantive architectural deviation emerges (e.g., abandoning the 3-job structure, rejecting matrix fan-out, or wanting to re-introduce threshold routing), STOP and open a new ADR that supersedes or partially supersedes ADR-008 / ADR-002 as appropriate.
 - Time: ~15 min.
 
 ### P5-T8 — Local validation
 
-- Run `act` on a synthetic large-diff fixture; confirm zone-map → matrix → synthesis all execute.
+- Run `act` on a synthetic large-diff fixture with `@claude survey-matrix`; confirm zone-map → matrix → synthesis all execute.
 - Force one matrix leg to fail; confirm synthesis still posts with a degraded note.
-- Re-run with a small-diff fixture; confirm new jobs are skipped on the L1 path.
+- Re-run with `@claude survey` (L1); confirm the new L3 jobs are skipped and the L1 path is unchanged.
 - Time: ~30 min.
 
 ### P5-T9 — Open PR
 
-- Push `feat/p5-survey-l3`; title PR `feat(survey): L3 matrix fan-out`.
-- Include before/after job-graph notes; call out the threshold input.
-- Tag the maintainer; reference this phase doc as the implementation detail record (no ADR-002 edit).
+- Push `feat/p5-survey-l3`; title PR `feat(survey): L3 matrix fan-out as survey-matrix mode`.
+- Include before/after job-graph notes; call out the new explicit-trigger contract (no threshold).
+- Tag the maintainer; reference this phase doc and ADR-008 Decision §2 as the design record (no ADR body edits).
 - Time: ~10 min.
 
 ### P5-T10 — Wait CI + CodeRabbit
@@ -106,7 +109,7 @@
 
 ### P5-T12 — End-to-end checkpoint validation
 
-- Re-run `@claude survey` on CBM PR #1 post-merge; confirm the 3-job structure activates above threshold.
+- Run `@claude survey-matrix` on CBM PR #1 post-merge; confirm the 3-job structure activates. Then run `@claude survey` (L1) on the same PR; confirm L1 path is unaffected.
 - Verify the synthesis comment posts with expected dedupe and cross-zone integrity notes.
 - Only after that real-traffic run succeeds, write the dual checkpoint: per-phase detail at `.planning/auto-execution/checkpoints/CHECKPOINT-P5.md`, and append a summary entry to `.planning/auto-execution/CHECKPOINTS.md` (aggregate index).
 - Time: ~30 min.
@@ -117,7 +120,7 @@
 
 ## End-to-end validation
 
-After P5 merges and v1 bumps, re-run `@claude survey` on CBM PR #1 and verify the 3-job structure activates and produces a comment. This validation IS part of the P5 checkpoint — checkpoint is not written until end-to-end runs successfully.
+After P5 merges and v1 bumps, run `@claude survey-matrix` on CBM PR #1 and verify the 3-job structure activates and produces a synthesized comment; also run `@claude survey` (L1) and verify the L1 path is unchanged. This validation IS part of the P5 checkpoint — checkpoint is not written until both end-to-end runs succeed.
 
 ## References
 

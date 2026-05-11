@@ -1,6 +1,6 @@
 # ADR-002: Parallelism architecture — L1 baseline, skip L2, L3 via matrix fan-out
 
-Status: accepted; amended by ADR-008 (refines L3 routing from threshold-based to explicit-trigger)
+Status: accepted; partially superseded by ADR-008 (re: L3 routing — threshold-based dispatch withdrawn in favor of explicit triggers; L1→L3 ladder and L2 rejection remain in force)
 Date: 2026-05-08
 
 ## Context
@@ -61,6 +61,14 @@ Routing is per-input and threshold-based; below the threshold the
 workflow stays at L1. The threshold is calibrated against existing
 CodeRabbit / Codex findings on representative PRs before L3 is enabled
 in production for any given mode — the choice is empirical, not a priori.
+
+> **Note (2026-05-11, partial supersession by ADR-008):** The
+> threshold-based routing described in this section (`survey_l3_threshold`
+> and "routing is per-input and threshold-based") is **withdrawn** by
+> [ADR-008](ADR-008-l3-mode-variants.md) Decision §1. L3 dispatch is
+> now explicit-trigger only (`@claude survey-matrix`, etc.), not
+> automatic. The L1→L3 ladder and the rejection of L2 (below) remain
+> in force; only the routing mechanism is replaced.
 
 L2 is rejected for the first iteration of multi-agent review.
 

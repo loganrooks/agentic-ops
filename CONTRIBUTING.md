@@ -79,8 +79,14 @@ of changes that require an ADR:
 - Versioning policy changes
 - Allowlist policy changes (especially `extra_allowed_tools` shape)
 
-ADRs are numbered (`ADR-NNN-kebab-case.md`) and not edited once
-accepted; they are superseded by a new ADR.
+ADRs are numbered (`ADR-NNN-kebab-case.md`) and their bodies are not
+edited once accepted; they are superseded, amended, or partially
+superseded by a new ADR per the relationship conventions in
+[`docs/adr/README.md`](docs/adr/README.md). The `Status:` line is the
+one exception — it may be updated to record a later ADR's
+relationship (and a single inline body note may be added when a
+later ADR partially supersedes a portion). No other body edits are
+permitted.
 
 ## Tag and release protocol
 

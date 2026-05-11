@@ -52,12 +52,11 @@ L1 samples have been collected:
   + S1–S3) plus a noted false-positive risk on W1 itself (caller
   stub's forward-looking paths).
 
-Supervisor evaluation of those three samples (captured in
-`.planning/auto-execution/STATE.md` under EMPIRICAL-GATE-T3/T5/T6
-notes) graded the outputs as substantively useful — most findings
-hold up against the code — and calibrated within their visible
-scope. But the same evaluation flagged structural limits in what
-those samples can prove:
+Reading the three artifacts linked above, the outputs are
+substantively useful — most findings hold up against the code (a
+small number, e.g. forward-compat W-1 on the caller-stub paths, may
+be calibration misses) and are calibrated within their visible scope.
+But that evaluation reaches its limits quickly:
 
 - **No ground truth.** The findings were graded by reading the output;
   there is no oracle for what *should* have been found. The evaluator
