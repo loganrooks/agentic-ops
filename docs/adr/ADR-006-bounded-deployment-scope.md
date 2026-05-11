@@ -1,6 +1,6 @@
 # ADR-006: Deployment scope bounded to internal consumers until OQ-1 resolves
 
-Status: accepted
+Status: accepted; partially superseded by ADR-009 (re: §2 consumer cap)
 Date: 2026-05-10
 
 ## Context
@@ -63,6 +63,13 @@ Concretely:
    of the cap is to force the conversation about maintenance load
    before scope expands, and that conversation is needed for any
    seventh consumer regardless of provenance.
+
+   > **Note (2026-05-11, partial supersession by ADR-009):** The
+   > six-consumer cap stated in this section is withdrawn by
+   > [ADR-009](ADR-009-consumer-cap-relaxation.md) §Decision; the
+   > consumer set is now eight (six original + vigil + agentic-ops).
+   > The named-set discipline (adding a further consumer requires a
+   > superseding ADR) is preserved.
 
 3. **No installer for external use.** Install mechanism for the six
    internal consumers may be a `gh` extension, a coded scaffolder, or

@@ -27,6 +27,8 @@
 | f1-modeling | `["review","quick","deep","audit:tech-debt"]` | `notebooks/*.ipynb`, `src/**/*.py` | `Bash(ruff:*)` |
 | epistemic-agency | `["review","quick","deep","audit:forward-compat"]` | `src/**/*.ts`, `docs/` | `Bash(eslint:*)` |
 | scholardoc | `["review","quick","deep","survey","audit"]` | `src/**/*.py`, `docs/` | `Bash(ruff:*),Bash(mypy:*)` |
+| vigil | `["review","quick","deep","audit:agential-dx"]` | `""` | `""` |
+| agentic-ops | `["review","quick","deep","opus","survey","audit","gates"]` | `.github/workflows/review.yml`, `.github/scripts/`, `docs/adr/` | `Bash(actionlint:*),Bash(shellcheck:*),Bash(yamllint:*)` |
 
 ## Per-repo subtasks (5x; n in {1..5})
 
