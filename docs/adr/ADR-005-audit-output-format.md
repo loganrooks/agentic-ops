@@ -104,6 +104,11 @@ Field semantics:
 - `Commit SHA`: full 40-char SHA of `github.sha` at trigger time.
 - `Run`: URL of the workflow run, for traceability back to logs.
 
+> **Note (2026-05-11, amended by ADR-008):** The `Mode:` enum is
+> extended to include `survey-matrix`, `audit-matrix`, and
+> `audit-all` for L3 matrix-variant modes; see
+> [ADR-008](ADR-008-l3-mode-variants.md) Decision §5.
+
 The footer is the contract surface for M2's weekly-health aggregator.
 Any future tool that reads historical audits parses these lines.
 

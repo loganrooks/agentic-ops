@@ -85,8 +85,9 @@ superseded by a new ADR per the relationship conventions in
 [`docs/adr/README.md`](docs/adr/README.md). The `Status:` line is the
 one exception — it may be updated to record a later ADR's
 relationship (and a single inline body note may be added when a
-later ADR partially supersedes a portion). No other body edits are
-permitted.
+later ADR amends or partially supersedes a portion; the note format
+is specified in `docs/adr/README.md` §"Editing rule"). No other body
+edits are permitted.
 
 ## Tag and release protocol
 
