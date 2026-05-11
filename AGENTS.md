@@ -82,8 +82,11 @@ of others:
 - **Do not add test runners** (pytest, jest, npm test, cargo test)
   to the `extra_allowed_tools` policy. See `docs/adr/ADR-004-allowlist-policy.md`.
 - **Do not bypass CI.** No `--no-verify`, no merging red PRs.
-- **Do not edit existing ADRs.** Supersede with a new ADR if a
-  decision changes.
+- **Do not edit existing ADR bodies.** Supersede with a new ADR if a
+  decision changes, or amend per `docs/adr/README.md` if the change
+  is purely additive. ADR `Status:` lines may be updated to reflect
+  later amend/supersede/deprecate relationships per the README's
+  metadata-only editing exception; no other lines may be edited.
 - **Do not commit secrets.** `CLAUDE_CODE_OAUTH_TOKEN`, `GH_TOKEN`,
   PATs, etc. live in repo secrets only.
 - **Do not skip the wrapper.** All comment posting goes through

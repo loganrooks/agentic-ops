@@ -30,11 +30,34 @@ by another name. The conflict has not surfaced because L3 is not yet
 implemented (P5 and P6 in the phase map). It must be resolved before
 those phases begin.
 
-The empirical context is the in-progress EMPIRICAL-GATE on CBM PR #1
-and CBM main (issue #9), which produced three L1 samples (one
-`survey`, two `audit:` lenses). The samples are visibly calibrated
-and substantively useful — but the supervisor evaluation flagged
-structural limits in what those samples can prove:
+The empirical context is the in-progress EMPIRICAL-GATE on CBM. Three
+L1 samples have been collected:
+
+- `survey` on `loganrooks/codebase-mapper` PR #1
+  ([run 25638955721](https://github.com/loganrooks/codebase-mapper/actions/runs/25638955721),
+  comment posted 2026-05-10T20:35:33Z): 8 zones, 28 of 357 files
+  read, 4 findings (W1 schema duplication, W2 `loop_status_config`
+  family scope, S1 PR #1 workflow regression, S2 AGENTS.md schema
+  path drift).
+- `audit:agential-dx` on CBM main commit
+  [f7f105c](https://github.com/loganrooks/codebase-mapper/commit/f7f105c)
+  ([run 25655224283](https://github.com/loganrooks/codebase-mapper/actions/runs/25655224283),
+  comment posted 2026-05-11T07:07:01Z): 10 files / 6 directories,
+  9 findings (W1 no root CONTRIBUTING.md, W2 no ADRs, W3 no builder
+  guide, W4 absent `platform/codex/`, plus S1–S5).
+- `audit:forward-compat` on CBM main commit f7f105c
+  ([run 25655799321](https://github.com/loganrooks/codebase-mapper/actions/runs/25655799321),
+  comments posted 2026-05-11T07:20:25Z and 07:20:46Z as `[Audit 1/2]`
+  + `[Audit 2/2]`): 14 files / 6 directories, 8 findings (W1–W5
+  + S1–S3) plus a noted false-positive risk on W1 itself (caller
+  stub's forward-looking paths).
+
+Supervisor evaluation of those three samples (captured in
+`.planning/auto-execution/STATE.md` under EMPIRICAL-GATE-T3/T5/T6
+notes) graded the outputs as substantively useful — most findings
+hold up against the code — and calibrated within their visible
+scope. But the same evaluation flagged structural limits in what
+those samples can prove:
 
 - **No ground truth.** The findings were graded by reading the output;
   there is no oracle for what *should* have been found. The evaluator
@@ -81,9 +104,12 @@ Three coordinated decisions:
 
 Resolve the ADR-001 / ADR-002 tension in favor of ADR-001's
 debuggability stance. L3 modes fire only on explicit user triggers
-(`@claude survey-matrix`, `@claude audit-matrix:lens`,
-`@claude audit-all`). The substrate does not auto-promote L1 invocations
-to L3 based on diff size, file count, or any other heuristic.
+(`@claude survey-matrix`, `@claude audit-matrix:<lens>`,
+`@claude audit-all`). The substrate does not auto-promote L1
+invocations to L3 based on diff size, file count, or any other
+heuristic. (Note on naming: `audit-matrix` is the *mode*; the lens is
+a trigger argument parsed into `audit_target`, mirroring the existing
+L1 `audit` dispatcher. See Decision §2 for the parsing contract.)
 
 The `survey_l3_threshold` mechanism named in ADR-002 is withdrawn.
 Per-input threshold-based routing introduces exactly the
@@ -97,10 +123,18 @@ Auto-suggestion ("this PR is large; consider `survey-matrix`") may be
 added later as a separate, advisory layer that does not alter dispatch.
 That is out of scope here.
 
-### 2. Three L3 modes added to the taxonomy
+### 2. Three L3 modes reserved in the taxonomy (addition contingent on EMPIRICAL-GATE)
 
-The taxonomy in ADR-001 grows from seven modes to ten. The three new
-modes are:
+This ADR reserves the names, semantics, and contracts for three new
+modes. **Actual taxonomy expansion is gated by EMPIRICAL-GATE per the
+"EMPIRICAL-GATE refinement" section below.** If the gate clears for a
+mode family, the corresponding mode(s) ship as defined here. If the
+gate produces a null result for a family, those modes are not added,
+and a follow-up ADR narrows the reservation. Until the gate clears,
+the names are reserved (no other ADR or implementer may use them for
+different purposes) but the dispatcher does not yet handle them.
+
+The three reserved modes:
 
 - **`survey-matrix`** — L3 spatial decomposition of a large PR.
   Two-stage workflow: a *zone planner* produces a JSON zone map
@@ -115,14 +149,25 @@ modes are:
   the synthesizer model choice within the L3 mode, not on dispatch to
   the mode itself).
 
-- **`audit-matrix:lens`** — L3 within-lens depth fan-out for a single
-  audit lens. Two-stage workflow: a *lens-plan agent* decomposes the
-  lens into N sub-questions (N target: 3–6); matrix fan-out runs one
-  worker per sub-question; synthesizer reconciles. Trigger:
-  `@claude audit-matrix:agential-dx`, `@claude audit-matrix:tech-debt`,
-  etc. Free-form syntax (`@claude audit-matrix <free-form>`) is
-  permitted but the lens-plan agent has to do extra work to derive
-  sub-questions; output variance is higher.
+- **`audit-matrix`** — L3 within-lens depth fan-out for a single
+  audit lens. The mode name in `enabled_modes` is the stable string
+  `audit-matrix`; the lens is the trigger argument, parsed into
+  `audit_target` exactly as the L1 `audit` dispatcher does today
+  (`ADR-001` §"Decision" wires `audit` mode + dynamic `audit_target`,
+  not a lens-suffixed mode name). Triggers:
+  `@claude audit-matrix:agential-dx` parses to
+  `mode=audit-matrix, audit_target=agential-dx`;
+  `@claude audit-matrix <free-form>` parses to
+  `mode=audit-matrix, audit_target=<free-form>`. Consumers list
+  `audit-matrix` once in `enabled_modes`, independent of which
+  lenses they want triggerable.
+
+  Implementation: two-stage workflow — a *lens-plan agent* decomposes
+  `audit_target` into N sub-questions (N target: 3–6); matrix fan-out
+  runs one worker per sub-question; synthesizer reconciles. Free-form
+  targets are permitted but increase variance (the lens-plan agent
+  has to derive sub-questions from arbitrary text rather than a
+  registered lens prompt).
 
 - **`audit-all`** — L3 across-lens breadth fan-out. Runs every
   built-in lens (currently `agential-dx`, `tech-debt`, `forward-compat`,
@@ -140,22 +185,23 @@ cost ratio for those triggers and should declare that explicitly.
 
 ### 3. Audit L3 ships as two modes, not one
 
-`audit-matrix:lens` and `audit-all` are conceptually distinct. They
-serve different use cases (depth on one lens vs. breadth across all
-lenses), have different planner stages (sub-question decomposition vs.
-lens enumeration), and produce differently-structured output (one-lens
+`audit-matrix` and `audit-all` are conceptually distinct. They serve
+different use cases (depth on one lens vs. breadth across all lenses),
+have different planner stages (sub-question decomposition vs. lens
+enumeration), and produce differently-structured output (one-lens
 unified report vs. multi-lens grouped report).
 
 Shipping them as separate modes preserves the lens-as-extension-point
 property from ADR-001: adding a new lens later automatically expands
 `audit-all`'s sweep without modifying any other mode. Collapsing them
-into one mode (e.g., `audit-matrix` that switches behavior based on
-argument shape) would require special-casing the argument parser and
-would obscure which shape ran from the trigger alone.
+into one mode that switches behavior based on argument shape (e.g.,
+bare `@claude audit-matrix` runs across-lens, `@claude audit-matrix:X`
+runs within-lens X) would require special-casing the argument parser
+and would obscure which shape ran from the trigger alone.
 
 The naming distinction is also load-bearing for cost predictability:
 `audit-all` is exactly *L (lenses) × T (per-lens-token-cost)*;
-`audit-matrix:lens` is exactly *N (sub-questions) × T*. The two have
+`audit-matrix` is exactly *N (sub-questions) × T*. The two have
 different cost profiles and should not be hidden behind a single name.
 
 ### 4. `deep-matrix` deferred
@@ -216,8 +262,29 @@ real consumer before committing implementation effort to L3. But the
 *bar* this ADR sets is more specific than the original phase-map
 framing ("conditional on empirical signal that L1 isn't enough").
 
-P5 and P6 land if a hand-rolled L1-vs-L3 comparison on at least one
-mode demonstrates one or more of:
+The gate is **per mode family**, not blanket. Each L3 mode needs its
+own evidence; one mode's comparison does not authorize another.
+Specifically:
+
+- **P5 (`survey-matrix`)** lands if an L1-vs-L3 comparison on `survey`
+  clears the improvement bar below. Canonical candidate PR: CBM PR #1.
+- **P6 (`audit-matrix`)** lands if an L1-vs-L3 comparison on at least
+  one audit lens with non-trivial sub-question decomposition clears
+  the bar. The depth-fan-out shape must be the one being tested
+  (lens-plan agent → matrix → synthesizer), not a different audit
+  shape.
+- **P6 (`audit-all`)** lands if an L1-vs-L3 comparison on the
+  across-lens sweep clears the bar. L1 baseline is four separate
+  L1 audit lenses run sequentially; L3 is one across-lens run with
+  parallel workers and a unified synthesizer. The breadth-fan-out
+  shape must be the one being tested.
+
+Neither audit shape authorizes the other; they have different planner
+stages, different worker prompts, and different cost profiles. Both
+need evidence to ship.
+
+A comparison "clears the improvement bar" by demonstrating one or
+more of:
 
 - **Coverage gain** — L3 reads files L1 declined to read, and those
   files contain content that materially changes findings.
@@ -231,7 +298,7 @@ mode demonstrates one or more of:
   reveals genuine ambiguity, where L1's single-perspective output
   hides it.
 
-At a cost ratio of ≤Nx tokens for ≥0.5N improvement in any of the
+…at a cost ratio of ≤Nx tokens for ≥0.5N improvement in any of the
 above. (Cost ratio is approximate; the exact factor depends on
 synthesizer model choice and per-mode N. The point is: L3 doesn't
 have to break even on every dimension, but the integrated improvement
@@ -283,7 +350,7 @@ worth preserving — null results matter.
   addition may be warranted in a future ADR-007 amendment.
 - Cost ratio of approximately Nx for L3 invocations, variable per
   mode. `survey-matrix` cost scales with zone count (typically 5–10);
-  `audit-matrix:lens` with sub-question count (typically 3–6);
+  `audit-matrix` with sub-question count (typically 3–6);
   `audit-all` with built-in-lens count (currently 4). Plus synthesizer
   overhead. A single `audit-all` run is roughly 5× the cost of a
   single L1 audit.
