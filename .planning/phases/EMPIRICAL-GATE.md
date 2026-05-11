@@ -126,7 +126,7 @@ For each family that does NOT clear:
 - Record the verdict and rationale in the decision file's
   per-family gate section.
 - Mark the corresponding phase (or sub-mode within P6) as
-  `skipped` in STATE.md.
+  `skipped` in [`.planning/auto-execution/STATE.md`](../auto-execution/STATE.md).
 - Proceed to the next phase. P5/P6 do not block P7 (onboarding) —
   per the decision file's "Phase implications" table, P7 is
   unblocked regardless of P5/P6 outcomes.
