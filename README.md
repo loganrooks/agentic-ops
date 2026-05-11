@@ -78,6 +78,9 @@ codebase. This is the missing piece.
   threat-model gating, and L3 mode variants).
 - [AGENTS.md](./AGENTS.md) — operative discipline for contributors
   (human or agentic).
+- [ONBOARDING.md](./ONBOARDING.md) — recipe for adding a named
+  internal consumer (bounded by ADR-006 / ADR-009; external use
+  out of scope per ADR-006 §3).
 - [SECURITY.md](./SECURITY.md) — threat model and reporting.
 
 ## Who this is for
