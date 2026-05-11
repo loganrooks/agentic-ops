@@ -152,8 +152,9 @@ The note must:
 - be a single short block (≤7 lines) prefixed with the verbatim
   marker `**Note (YYYY-MM-DD, <amended|partial supersession> by
   ADR-MMM):**`,
-- name the section of the superseding ADR readers should consult
-  (e.g. "see [ADR-008](ADR-008-l3-mode-variants.md) Decision §2"),
+- name the section of the amending/superseding ADR readers should
+  consult (e.g. "see [ADR-008](ADR-008-l3-mode-variants.md)
+  Decision §2"),
 - for `amended by`, point at the extension without paraphrasing the
   new ADR's content (the new ADR is canonical for what it says);
 - for `partially superseded by`, name *which named portion* of the
