@@ -1,6 +1,6 @@
 # Empirical gate (between P4 and P5)
 
-> **Updated 2026-05-11 to align with [ADR-008](../../docs/adr/ADR-008-l3-mode-variants.md):** Original gate logic was binary per mode ("L1 is sufficient → skip L3; else run L3"). ADR-008 Decision §2 replaces that with a per-family gate ("does L3 materially improve at defensible cost?") evaluated against a hand-rolled L1-vs-L3 comparison per family. The decision logic, procedure, and skip semantics below have been rewritten accordingly. Current per-family gate state is tracked authoritatively in [.planning/auto-execution/EMPIRICAL-GATE.md](../auto-execution/EMPIRICAL-GATE.md); this phase doc specifies the procedure.
+> **Updated 2026-05-11 to align with [ADR-008](../../docs/adr/ADR-008-l3-mode-variants.md):** Original gate logic was binary per mode ("L1 is sufficient → skip L3; else run L3"). ADR-008 Decision §2 replaces that with a per-family gate ("does L3 materially improve at defensible cost?") evaluated against a hand-rolled L1-vs-L3 comparison per family. The decision logic, procedure, and skip semantics below have been rewritten accordingly. The autonomous executor records per-family gate verdicts to a local decision file at `.planning/auto-execution/EMPIRICAL-GATE.md` (gitignored per `.gitignore`; auto-execution state is local runtime state, not a versioned canonical reference — readers should rely on this phase doc as the spec, and on the L1-baseline summary inline below for captured data).
 
 **Goal:** Validate that each L3 mode-family (`survey-matrix`,
 `audit-matrix`, `audit-all`) clears ADR-008's per-family improvement
@@ -10,7 +10,7 @@ or remain pending without affecting the others.
 
 **Status:** pending (depends on CHECKPOINT-P4)
 
-**Output:** [.planning/auto-execution/EMPIRICAL-GATE.md](../auto-execution/EMPIRICAL-GATE.md) (decision file written by the agent during execution; records L1 baselines and per-family gate state)
+**Output location:** `.planning/auto-execution/EMPIRICAL-GATE.md` (gitignored runtime artifact; written by the autonomous executor across phase sessions, archived at P9 per `.gitignore` comment). Per-family gate verdicts and any comparison-run metrics produced in Stage 2 are appended there.
 
 ## Trigger conditions
 
@@ -30,27 +30,35 @@ audit-all waits on the two remaining L1 lens runs.
 
 ### Stage 1 — L1 baseline capture (mostly complete)
 
-The L1 baselines for `survey`, `audit:agential-dx`, and
-`audit:forward-compat` are captured in the decision file
-([.planning/auto-execution/EMPIRICAL-GATE.md](../auto-execution/EMPIRICAL-GATE.md) §"L1 baseline metrics"). Each baseline names the
-run URL, model, files read, runtime, finding count, and lens
-alignment.
+Three of the five L1 baselines have been captured (T1-T6) against
+the canonical test target (CBM PR #1 for survey; CBM issue #9 for
+audit lenses). Summary (full run metrics are appended to the
+gitignored local decision file by the autonomous executor; the
+durable record below is sufficient for Stage 2 planning):
+
+- **survey** — Run [25638955721](https://github.com/loganrooks/codebase-mapper/actions/runs/25638955721); model `claude-sonnet-4-6`; 8 zones identified; 28/357 files read; runtime ≈8m15s; 4 findings (W1, W2, S1, S2). Calibration note: S1 was framed P3 but was effectively a P1 merge-blocker — a candidate datum for the survey-matrix calibration-improvement dimension.
+- **audit:agential-dx** — Run [25655224283](https://github.com/loganrooks/codebase-mapper/actions/runs/25655224283); model `claude-sonnet-4-6`; 10 files read across 6 directories; runtime ≈8m; 9 findings (W1-W4, S1-S5); strong lens alignment.
+- **audit:forward-compat** — Run [25655799321](https://github.com/loganrooks/codebase-mapper/actions/runs/25655799321); model `claude-sonnet-4-6`; 14 files read across 6 directories; runtime ≈8m; 8 findings (5W + 3S); output split across two comments (`[Audit 1/2]` + `[Audit 2/2]`) at ≈8865 chars — first comment-split observed below ADR-005's 50KB soft threshold, tracked for P8 observability.
 
 Two L1 lens runs remain uncaptured for the `audit-all` baseline:
 `audit:tech-debt` and `audit:discipline` against CBM issue #9. Per
-ADR-008 §2, the `audit-all` comparison requires all four built-in
-lenses run individually as L1 before the ensemble L3 path can be
-fairly compared. Capturing those two completes the L1 baseline for
-the cross-lens fan-out family.
+ADR-008, the `audit-all` comparison's L1 baseline is the
+*aggregate* of all four built-in lenses run individually as L1
+(`agential-dx`, `tech-debt`, `forward-compat`, `discipline`). The
+ensemble L3 path cannot be fairly compared until those two runs
+are captured.
 
 ### Stage 2 — Hand-rolled L1-vs-L3 comparison per family
 
-Per ADR-008 §2, each L3 mode-family clears its gate via a
-hand-rolled L1-vs-L3 comparison evaluated against the corresponding
-L1 baseline. The comparisons are independent and run as separate
-sub-phases. Per ADR-008, the comparison is not gated on dispatcher
-implementation — it is orchestrated manually by firing multiple L1
-invocations with non-overlapping seeds and synthesizing offline.
+All Stage 2 comparisons use the same canonical targets as Stage 1:
+CBM PR #1 for `survey-matrix`, CBM issue #9 for audit-family
+comparisons. Per ADR-008 §2, each L3 mode-family clears its gate
+via a hand-rolled L1-vs-L3 comparison evaluated against the
+corresponding L1 baseline. The comparisons are independent and run
+as separate sub-phases. Per ADR-008, the comparison is not gated
+on dispatcher implementation — it is orchestrated manually by
+firing multiple L1 invocations with non-overlapping seeds and
+synthesizing offline.
 
 The three required comparisons, per ADR-008 §"EMPIRICAL-GATE
 refinement", are:
@@ -85,9 +93,26 @@ refinement", are:
    Compare the aggregated L1 sweep against the assembled
    across-lens-parallel result.
 
-Each comparison produces a verdict appended to the decision file's
-per-family gate section: `CLEARED`, `NOT CLEARED`, or `INSUFFICIENT
-EVIDENCE`. `INSUFFICIENT EVIDENCE` escalates per HUMAN-GATE-5.
+Each comparison produces a verdict appended to the local decision
+file's per-family gate section: `CLEARED`, `NOT CLEARED`, or
+`INSUFFICIENT EVIDENCE`. `INSUFFICIENT EVIDENCE` escalates per
+HUMAN-GATE-5.
+
+**Detecting ensemble disagreement.** "Ensemble disagreement" is
+one of the four clearing dimensions in §"Decision logic" below, and
+each recipe surfaces it differently: for survey-matrix, two or
+more zone-workers reach different conclusions on the same
+cross-zone boundary or invariant (overlapping/conflicting findings
+on a shared seam); for audit-matrix, two or more sub-question
+workers diverge on adjacent sub-questions of the same lens (e.g.,
+sub-question A flags an issue sub-question B endorses, or vice
+versa); for audit-all, two or more lenses flag the same
+file/finding with different severity, mutually exclusive
+recommendations, or one lens surfaces an issue that another lens
+structurally missed. The agent records each detected disagreement
+alongside the two conflicting outputs, the lenses or sub-question
+or zone IDs, and a one-sentence rationale for why the disagreement
+changes L1's single-perspective output.
 
 ## Decision logic
 
@@ -128,12 +153,13 @@ Per-family cost caps (from ADR-008):
 | audit-matrix | `L3 tokens ≤ N × L1 tokens` | Single L1 `@claude audit:<lens>` run for the same lens | sub-question count (target 3-6) |
 | audit-all | `audit-all tokens ≤ 1.2 × aggregate-L1 tokens` | **Aggregate** of four sequential L1 audit lens runs (the L1 sweep) | not applicable — baseline is already aggregate; 1.2× allows 20% synthesis overhead, no parallel-budget premium |
 
-For survey-matrix and audit-matrix the N multiplier applies because
-the L1 baseline is a single run and the L3 fan-out is genuinely
-parallel work N agents wouldn't otherwise do. For audit-all the
-baseline is already aggregate, so the multiplier does not apply —
-the cap is tighter because the comparison is L3-vs-aggregate-L1,
-not L3-vs-single-L1.
+For survey-matrix and audit-matrix the N fan-out multiplier
+applies because the L1 baseline is a single run and the L3
+fan-out is genuinely parallel work N agents wouldn't otherwise do.
+For audit-all the baseline is already aggregate, so the N fan-out
+multiplier does not apply — a 1.2× synthesis-overhead multiplier
+still applies, but the cap is tighter than the per-mode N formula
+because the comparison is L3-vs-aggregate-L1, not L3-vs-single-L1.
 
 Exceeding the acceptable ratio requires the improvement dimensions
 to scale proportionally; the gate artifact must justify the higher
@@ -192,18 +218,18 @@ orchestration, synthesis, and write-up.
 - The cost caps are derived from ADR-008 §2 but are unvalidated.
   The first real comparison should also produce calibrated cost
   numbers; if a cap is wrong, a successor ADR adjusts it.
-- Comparison ordering. Per the decision file §"Open
-  considerations", the three Stage-2 comparisons can run either
-  before P7 (sequential, original ordering) or after P7 (allows
-  real onboarded-repo workloads to strengthen the comparison's
-  evidence base). This phase doc does not fix the ordering; that
-  is a plan-level call.
+- Comparison ordering. Since P7 does not block on P5/P6 outcomes
+  (see §"If skipping P5 and/or P6" above), the three Stage-2
+  comparisons can run either before P7 (sequential, original
+  ordering) or after P7 (allows real onboarded-repo workloads to
+  strengthen the comparison's evidence base). This phase doc does
+  not fix the ordering; that is a plan-level call.
 
 ## References
 
 - [ADR-008 — L3 mode variants](../../docs/adr/ADR-008-l3-mode-variants.md) — governing ADR; §2 names the per-family gate criteria and cost caps
 - [ADR-002 — Parallelism architecture](../../docs/adr/ADR-002-parallelism-architecture.md) — L1 baseline / L3 conditional framing (partially superseded by ADR-008 re: routing)
-- [.planning/auto-execution/EMPIRICAL-GATE.md](../auto-execution/EMPIRICAL-GATE.md) — canonical source of current per-family gate state, L1 baselines, and per-comparison verdicts
+- `.planning/auto-execution/EMPIRICAL-GATE.md` — local runtime artifact (gitignored per `.gitignore`): the autonomous executor's working decision file for per-family gate state and per-comparison verdicts. Not a versioned canonical source; readers should rely on this phase doc as the spec
 - [phases/P5-survey-mode-l3.md](P5-survey-mode-l3.md) — runs if survey-matrix comparison clears
 - [phases/P6-audit-mode-l3.md](P6-audit-mode-l3.md) — runs per-mode if audit-matrix and/or audit-all comparisons clear
 - HUMAN-GATE-5 in [`HUMAN-GATES.md`](../HUMAN-GATES.md) — ambiguous gate metrics escalate to user
