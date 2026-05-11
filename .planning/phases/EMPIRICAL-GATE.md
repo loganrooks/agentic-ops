@@ -52,26 +52,38 @@ sub-phases. Per ADR-008, the comparison is not gated on dispatcher
 implementation — it is orchestrated manually by firing multiple L1
 invocations with non-overlapping seeds and synthesizing offline.
 
-The three required comparisons are:
+The three required comparisons, per ADR-008 §"EMPIRICAL-GATE
+refinement", are:
 
-1. **survey-matrix** (gates P5). Orchestrate ≥3 L1 `@claude survey`
-   invocations against CBM PR #1 with non-overlapping zone seeds
-   (e.g., comment-prompt each invocation to focus on a disjoint
-   subset of the 8 zones identified in the L1 baseline). Synthesize
-   the outputs offline. Compare findings + severity + coverage
-   against the single-shot L1 baseline.
-2. **audit-matrix** (gates P6, within-lens fan-out). Orchestrate
-   ≥3 L1 `@claude audit:<lens>` invocations of one lens (e.g.,
-   `agential-dx`) with non-overlapping seed prompts that bias each
-   run toward a different subset of the lens's coverage. Synthesize
-   offline. Compare against the corresponding single-lens L1
-   baseline.
-3. **audit-all** (gates P6, cross-lens fan-out). Complete the
-   missing L1 baselines (`audit:tech-debt`, `audit:discipline`)
-   per Stage 1, then synthesize all four lens outputs offline as
-   the prospective `audit-all` ensemble. Compare against each
-   individual lens's L1 output to test for ensemble disagreement
-   or finding-class addition that single-lens audits miss.
+1. **survey-matrix** (gates P5; *zone fan-out*). Fire one L1
+   `@claude survey` against CBM PR #1 to obtain the zone map.
+   Then fire N narrower triggers — one per zone from the planner
+   output — using `@claude review` or `@claude survey` with
+   manually narrowed paths scoped to each zone. N is the
+   planner-reported zone count (8 for the captured CBM L1
+   baseline; typically 5-10 for survey-sized PRs). Assemble the
+   per-zone outputs offline with a synthesizer-equivalent prompt.
+   Compare the L1 `@claude survey` output against the assembled
+   zone-parallel result.
+2. **audit-matrix** (gates P6, *within-lens sub-question fan-out*).
+   Pick ONE lens (e.g., `audit:tech-debt`). Manually decompose
+   the lens into 3-6 sub-questions. Fire one L1 audit trigger per
+   sub-question using `@claude audit <free-form>` with each
+   sub-question as the free-form target. (Per ADR-008: repeating
+   `@claude audit:<lens>` does NOT test this shape — it tests
+   `audit-all`'s shape instead.) Assemble the per-sub-question
+   outputs offline with a within-lens synthesizer prompt. Compare
+   the single L1 `@claude audit:<lens>` baseline against the
+   assembled sub-question-parallel result.
+3. **audit-all** (gates P6, *across-lens breadth fan-out*).
+   Complete the missing L1 baselines (`audit:tech-debt`,
+   `audit:discipline`) per Stage 1 so all four built-in lenses
+   have a captured L1 run on the same subject. Aggregate the four
+   sequential L1 lens outputs as the L1 baseline (the L1 sweep).
+   Assemble the same four outputs offline with an across-lens
+   synthesizer prompt as the prospective `audit-all` L3 result.
+   Compare the aggregated L1 sweep against the assembled
+   across-lens-parallel result.
 
 Each comparison produces a verdict appended to the decision file's
 per-family gate section: `CLEARED`, `NOT CLEARED`, or `INSUFFICIENT
@@ -79,35 +91,55 @@ EVIDENCE`. `INSUFFICIENT EVIDENCE` escalates per HUMAN-GATE-5.
 
 ## Decision logic
 
-Per ADR-008 §2, each family's gate has its own criterion and its
-own cost cap. A family clears its gate when the comparison
-demonstrates at least one of:
+Per ADR-008 §"EMPIRICAL-GATE refinement", each family's gate has
+its own criterion and its own cost cap. A family clears its gate
+when the comparison demonstrates at least one of four named
+dimensions, *at or above its predeclared numerical threshold*:
 
-- **Coverage gain** — L3 surfaces findings the L1 baseline missed,
-  not just rephrases them.
-- **Calibration improvement** — L3 rates severities the L1
-  baseline mis-rated (e.g., the survey-L1 S1 miscalibration noted
-  in the decision file is a candidate datum for survey-matrix
-  calibration improvement).
-- **Finding-class addition** — L3 surfaces a class of finding the
-  L1 baseline structurally cannot reach (e.g., cross-zone
-  invariants for `survey-matrix`).
-- **Ensemble disagreement** — L3's synthesizer surfaces
-  contradictions between worker outputs that single-lens or
-  single-zone L1 cannot. Specific to `audit-all`.
+- **Coverage gain** — L3 reads files L1 declined to read, and
+  those files contain content that materially changes findings.
+  Threshold: ≥20% more files read with non-trivial content.
+- **Calibration improvement** — L3 corrects a severity
+  miscalibration L1 produced. Threshold: ≥1 severity correction
+  or new high-severity finding L1 missed. (The survey-L1 S1
+  miscalibration noted in the decision file is the reference
+  case.)
+- **Finding-class addition** — L3 surfaces a category of finding
+  that L1's spatial-budget prompt cannot reach. Threshold: ≥1
+  finding in a class L1's output structurally cannot reach.
+- **Ensemble disagreement** — L3 workers disagree in a way that
+  reveals genuine ambiguity, where L1's single-perspective output
+  hides it. Threshold: ≥1 productive disagreement surfaced that
+  L1 hid.
 
-Each family's cost cap is fixed by ADR-008 §2:
+The cost cap is **token-based**, not wall-clock: `L3_total_tokens
+/ L1_baseline_tokens` (L3 total includes planner + workers +
+synthesizer). Wall-clock is captured as baseline metadata but
+does not enter the gate decision — ADR-008 explicitly acknowledges
+hand-rolled comparisons lack true in-workflow parallelism, so a
+token-efficient L3 simulation must not be rejected for serial
+wall-clock.
 
-| Family | Cost cap |
-|---|---|
-| survey-matrix | `N × L1` (N = matrix width, typically 3-6 workers) |
-| audit-matrix | `N × L1` |
-| audit-all | `1.2 × aggregate-L1` (4 lens runs + 20% synthesis overhead) |
+Per-family cost caps (from ADR-008):
 
-`L1` is the corresponding single-shot L1 baseline cost (claude
-wall-clock + token spend). A comparison that exceeds the cost cap
-without compensating coverage/calibration/class/ensemble gain does
-NOT clear the gate, even if it produces nominally "better" output.
+| Family | Token-ratio cap | Baseline | N (fan-out factor) |
+|---|---|---|---|
+| survey-matrix | `L3 tokens ≤ N × L1 tokens` | Single L1 `@claude survey` run on the same PR | zone count from the planner output (8 for CBM L1; typically 5-10 for survey) |
+| audit-matrix | `L3 tokens ≤ N × L1 tokens` | Single L1 `@claude audit:<lens>` run for the same lens | sub-question count (target 3-6) |
+| audit-all | `audit-all tokens ≤ 1.2 × aggregate-L1 tokens` | **Aggregate** of four sequential L1 audit lens runs (the L1 sweep) | not applicable — baseline is already aggregate; 1.2× allows 20% synthesis overhead, no parallel-budget premium |
+
+For survey-matrix and audit-matrix the N multiplier applies because
+the L1 baseline is a single run and the L3 fan-out is genuinely
+parallel work N agents wouldn't otherwise do. For audit-all the
+baseline is already aggregate, so the multiplier does not apply —
+the cap is tighter because the comparison is L3-vs-aggregate-L1,
+not L3-vs-single-L1.
+
+Exceeding the acceptable ratio requires the improvement dimensions
+to scale proportionally; the gate artifact must justify the higher
+ratio explicitly. ADR-008's numerical thresholds are starting
+values; they may be loosened or tightened in a follow-up ADR if
+the first comparison shows them mis-calibrated.
 
 If a comparison's metrics are ambiguous (e.g., one finding-class
 addition borderline; cost ratio at cap), the agent escalates per
@@ -131,9 +163,13 @@ For each family that does NOT clear:
   per the decision file's "Phase implications" table, P7 is
   unblocked regardless of P5/P6 outcomes.
 
-A `NOT CLEARED` verdict does not foreclose later L3 work; ADR-008's
-cost caps may need successor ADRs if real comparison data shows
-them mis-calibrated.
+A `NOT CLEARED` verdict for a family means that family is
+*skipped*, not deferred: per ADR-008 §"EMPIRICAL-GATE refinement",
+the family's reserved mode name(s) are not added to the taxonomy.
+Resuming L3 work for that family later requires a follow-up ADR
+narrowing this ADR's Decision §2 — the reservation is not
+backlog. Each skip decision is itself an artifact worth preserving;
+null results matter.
 
 ## Estimated time
 
