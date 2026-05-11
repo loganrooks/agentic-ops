@@ -173,13 +173,17 @@ The three reserved modes:
   has to derive sub-questions from arbitrary text rather than a
   registered lens prompt).
 
-- **`audit-all`** — L3 across-lens breadth fan-out. Runs every
-  built-in lens (currently `agential-dx`, `tech-debt`, `forward-compat`,
-  `discipline`) in parallel as four L1 worker jobs; synthesizer merges
-  into one report grouped by lens. Trigger: `@claude audit-all`.
-  Useful for a comprehensive sweep without firing four separate
-  triggers. Free-form lenses are not included; the user adds them by
-  separately invoking `@claude audit:<free-form>` if desired.
+- **`audit-all`** — L3 across-lens breadth fan-out. Runs every entry
+  in the *effective* `audit_lens_registry` (default: the four built-in
+  lenses `agential-dx`, `tech-debt`, `forward-compat`, `discipline`;
+  consumers may extend the registry per repo to add lenses, which are
+  then automatically picked up by `audit-all`) in parallel as L1
+  worker jobs; synthesizer merges into one report grouped by lens.
+  Trigger: `@claude audit-all`. Useful for a comprehensive sweep
+  without firing one trigger per lens. Free-form lenses are not
+  enumerated by `audit-all` (free-form is per-trigger, not registered);
+  the user adds them by separately invoking
+  `@claude audit:<free-form>` or `@claude audit-matrix <free-form>`.
 
 All three modes are gated by `enabled_modes` per ADR-001's existing
 override discipline. The default `enabled_modes` array is *not*
@@ -227,7 +231,7 @@ from L3 outputs.
 If a mode family ships per Decision §2's reservation, that mode's
 synthesizer output uses one of:
 
-```
+```text
 Mode: survey-matrix | Lens: n/a | Model: <model-id>
 Mode: audit-matrix  | Lens: <id-or-"free-form"> | Model: <model-id>
 Mode: audit-all     | Lens: n/a | Model: <model-id>
@@ -350,10 +354,26 @@ more of:
   high-severity finding L1 missed; finding-class addition → ≥1
   finding in a class L1's output structurally cannot reach; ensemble
   disagreement → ≥1 productive disagreement surfaced that L1 hid.
-- **Acceptable cost ratio:** L3 tokens ≤ N × L1 tokens (i.e., the
-  parallel-budget premium). Exceeding this requires the improvement
-  dimensions to scale proportionally; the gate artifact must justify
-  the higher ratio.
+- **Acceptable cost ratio (per mode family):**
+  - **`survey-matrix`:** baseline is a single L1 `@claude survey` run.
+    `L3 tokens ≤ N × L1 tokens` where N is the L3 zone count. The
+    multiplier applies because the L1 baseline is a single run and
+    the L3 fan-out is genuinely parallel work N agents wouldn't
+    otherwise do.
+  - **`audit-matrix`:** baseline is a single L1 `@claude audit:<lens>`
+    run for the same lens. `L3 tokens ≤ N × L1 tokens` where N is the
+    sub-question count (target 3–6). Same logic as `survey-matrix`.
+  - **`audit-all`:** baseline is the *aggregate* of four sequential L1
+    audit lens runs (the L1 sweep). Because the baseline is already
+    aggregate, the multiplier *does not apply* — the gate is
+    `audit-all tokens ≤ 1.2 × (aggregate-L1 tokens)`, allowing a 20%
+    synthesis overhead but no parallel-budget premium beyond what the
+    aggregate already accounts for. Tighter than the per-mode N
+    formula because the comparison is L3-vs-aggregate-L1, not
+    L3-vs-single-L1.
+- For all three: exceeding the acceptable ratio requires the
+  improvement dimensions to scale proportionally; the gate artifact
+  must justify the higher ratio explicitly.
 
 The numerical thresholds are starting values; they may be loosened or
 tightened in a follow-up ADR if the first comparison shows them
@@ -364,18 +384,39 @@ the gate decision must be made against a *recorded* baseline and a
 **The EMPIRICAL-GATE comparison is hand-rolled, not gated on
 implementation.** The chicken-and-egg risk — "we can't run the L3
 comparison without implementing L3, but we can't implement L3 without
-the comparison" — is resolved as follows: the L1-vs-L3 comparison
-that gates P5/P6 is performed by manually orchestrating multiple L1
-triggers and assembling the L3-shaped output offline. For
-`survey-matrix`, this means firing multiple narrower `@claude review`
-or `@claude survey` triggers scoped to each zone (or running L1
-`@claude survey` once and re-analyzing the zone-by-zone output
-quality with an offline synthesizer prompt). For `audit-matrix` and
-`audit-all`, multiple `@claude audit:<lens>` triggers can be combined
-manually. The hand-rolled L3 is imperfect (no in-workflow parallel
-budget, manual synthesis) but sufficient to detect the four
-improvement dimensions. Only after the comparison clears for a mode
-family does that family's P5/P6 work begin.
+the comparison" — is resolved by manually orchestrating L1 triggers
+to simulate each L3 shape and assembling output offline. The recipe
+**differs per mode family** because the L3 shape under test differs:
+
+- **`survey-matrix` (zone fan-out):** fire L1 `@claude survey` once
+  to obtain the zone map, then fire N narrower triggers scoped to
+  each zone (`@claude review` or `@claude survey` with manually
+  narrowed paths, one per zone). Assemble per-zone outputs offline
+  with a synthesizer-equivalent prompt. Comparison is L1
+  `@claude survey` vs the assembled zone-parallel result.
+
+- **`audit-matrix` (within-lens sub-question fan-out):** pick ONE
+  lens (e.g. `audit:tech-debt`). Decompose the lens manually into 3–6
+  sub-questions. Fire one L1 audit trigger per sub-question using
+  `@claude audit <free-form>` with each sub-question as the free-form
+  target. Assemble the per-sub-question outputs offline with a
+  within-lens synthesizer prompt. Comparison is L1
+  `@claude audit:tech-debt` vs the assembled sub-question-parallel
+  result. **Multiple `audit:<lens>` triggers across lenses do NOT
+  test this mode — they test `audit-all`'s shape instead.**
+
+- **`audit-all` (across-lens fan-out):** fire all four built-in L1
+  audit lens triggers sequentially (`@claude audit:agential-dx`,
+  `@claude audit:tech-debt`, `@claude audit:forward-compat`,
+  `@claude audit:discipline`). Assemble the four outputs offline with
+  an across-lens synthesizer prompt. Comparison is the aggregated L1
+  sweep vs the assembled across-lens-parallel result.
+
+The hand-rolled L3 is imperfect (no in-workflow parallel budget,
+manual synthesis prompts, no actual matrix-job isolation) but
+sufficient to detect the four improvement dimensions. Only after
+the comparison clears for a mode family does that family's P5/P6
+work begin.
 
 If the comparison shows none of those gains for a mode family, that
 family's reserved mode(s) are *skipped* (not deferred); the mode
