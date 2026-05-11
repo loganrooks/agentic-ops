@@ -10,43 +10,16 @@ remain unresolved indefinitely; that's fine.
 
 ## OQ-1 — Personal tooling vs open-source product
 
-**Status:** RESOLVED 2026-05-11 toward "public-facing under Apache-2.0,
-no support commitment yet." Sections below preserve the original
-deliberation for historical context.
-
-### Resolution (2026-05-11)
-
-`agentic-ops` is licensed Apache-2.0 and welcomes external use, with
-the explicit caveat that **no support commitment is offered**. Issues
-and PRs from external users may or may not be triaged; the project's
-primary obligation remains the [loganrooks/](https://github.com/loganrooks)
-consumer repos.
-
-Reasoning behind the resolution:
-
-- The kernel substrate (P1-P4) is shipping and stable on
-  [codebase-mapper](https://github.com/loganrooks/codebase-mapper); the
-  patterns are generalizing, not fragmenting.
-- The maintainer has 6+ of their own repos (codebase-mapper,
-  prix-guesser, arxiv-sanity-mcp, f1-modeling, epistemic-agency,
-  scholardoc, vigil, +) to onboard. That scale-of-self forces the
-  same design discipline as external consumers: dumb-agent-executable
-  procedure, script fallback, no-hand-holding onboarding.
-- Apache-2.0 is the named candidate in the original plan; no
-  competing license has emerged.
-- The "no support" caveat preserves optionality. If external demand
-  produces clear adoption signals, the support posture can be
-  re-evaluated; the license decision itself is durable.
-
-This resolution does NOT commit to:
-- Maintaining preset configurations for repo shapes the maintainer
-  doesn't use
-- Triaging issues / PRs from external users on any timeline
-- Backwards-compatibility guarantees beyond what the `v1` tag
-  contract already specifies (per
-  [ADR-003](docs/adr/ADR-003-versioning-and-release.md))
-
-### Original deliberation (preserved for context)
+**Status:** still deferred. The license question that was conflated
+with this OQ has been resolved separately — LICENSE is Apache-2.0
+(in fact has been since the P1 merge, commit `3f5d05a`); the README
+previously misstated this as "TBD." That is a factual sync, not an
+OQ-1 resolution. OQ-1 itself — whether the substrate is a
+public-facing product with a maintenance commitment — remains
+deferred per [ADR-006](docs/adr/ADR-006-bounded-deployment-scope.md),
+which explicitly rejected resolving OQ-1 prematurely and bounded
+the substrate to six internal consumers until the ADR-006 trigger
+conditions are met.
 
 **Question:** Is `agentic-ops` something the user maintains for their
 own repos, or a public-facing product with maintenance commitment to
@@ -54,7 +27,9 @@ external users?
 
 **Deferred:** until the M-phase work is complete and the user has
 lived with the system long enough to know what's actually load-bearing
-vs. accidental.
+vs. accidental. ADR-006 specifies the trigger conditions for
+revisiting (all three required): OQ-1 signal conditions met,
+ADR-007 prerequisites met, new auth model ADR accepted.
 
 **What would resolve:**
 - (toward product) external interest emerges organically (issues,
@@ -65,8 +40,12 @@ vs. accidental.
   feels heavy enough that supporting strangers' edge cases would tip
   into untenable
 
-**Current leaning (pre-resolution):** personal-tooling-in-public-repo.
-License TBD; no support commitments offered. If demand emerges, revisit.
+**Current leaning:** personal-tooling-in-public-repo bounded to six
+internal consumers per ADR-006. License is Apache-2.0; no support
+commitments offered. Forks consumed externally are the forker's
+responsibility per ADR-006. If demand emerges, OQ-1 revisits through
+ADR-006-supersession work — not through a unilateral resolution
+here.
 
 ---
 

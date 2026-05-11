@@ -4,17 +4,19 @@
 
 ## Status
 
-Early but shipping. The kernel PR review substrate is live: review / quick /
-deep / opus / survey / audit modes (L1) on `loganrooks/agentic-ops`,
-consumed by `loganrooks/codebase-mapper` via the floating `v1` tag.
+L1 review substrate (review / quick / deep / opus / survey / audit modes) is
+merged on `loganrooks/agentic-ops` `main` and exposed via the floating `v1`
+tag (`v1` currently resolves to `7a73fa9`, the P4 merge). One consumer is
+live: `loganrooks/codebase-mapper` via its caller stub.
 
-L3 matrix-fan-out variants (`survey-matrix`, `audit-matrix`, `audit-all`) are
-designed in [ADR-008](docs/adr/ADR-008-l3-mode-variants.md) and gate-pending
-per-family empirical comparison.
+L3 matrix-fan-out variants (`survey-matrix`, `audit-matrix`, `audit-all`)
+are specified in [ADR-008](docs/adr/ADR-008-l3-mode-variants.md) and
+gate-pending per-family empirical comparison; not implemented.
 
-Onboarding flywheel (`ONBOARDING.md` + script + worked examples) is the next
-work item. Until that lands, see [`AGENTS.md`](AGENTS.md) and the CBM caller
-stub for the working reference shape.
+Deployment scope is bounded to internal consumers per
+[ADR-006](docs/adr/ADR-006-bounded-deployment-scope.md). External use of
+the public repo is permitted under Apache-2.0 but no external-onboarding
+path is offered.
 
 ## What this is
 
@@ -68,22 +70,29 @@ codebase. This is the missing piece.
   concrete phases.
 - [OPEN_QUESTIONS.md](./OPEN_QUESTIONS.md) — explicit deferrals, tradeoffs
   not yet resolved, and the criteria that would resolve each one.
-- [docs/adr/](./docs/adr/) — architecture decisions as they land within
-  this project (currently empty; the project itself is too young to have
-  internal decisions yet).
+- [docs/adr/](./docs/adr/) — architecture decisions
+  (ADRs 001-008 cover mode taxonomy, parallelism architecture, versioning,
+  allowlist policy, audit output format, bounded deployment scope,
+  threat-model gating, and L3 mode variants).
+- [AGENTS.md](./AGENTS.md) — operative discipline for contributors
+  (human or agentic).
+- [SECURITY.md](./SECURITY.md) — threat model and reporting.
 
 ## Who this is for
 
-Primary consumers are the [loganrooks/](https://github.com/loganrooks) repos:
+Six internal consumers per
+[ADR-006](docs/adr/ADR-006-bounded-deployment-scope.md):
 [codebase-mapper](https://github.com/loganrooks/codebase-mapper),
-prix-guesser, arxiv-sanity-mcp, f1-modeling, epistemic-agency, scholardoc,
-vigil, and others. Onboarding additional repos drives the design discipline.
+prix-guesser, arxiv-sanity-mcp, f1-modeling, epistemic-agency, scholardoc.
+ADR-006 caps the consumer set at six; relaxing the cap requires a
+superseding ADR.
 
-External use is welcome under the Apache-2.0 license but currently comes
-with **no support commitment**. Onboarding paths (recipe-doc, script,
-agent-executable procedure) are in progress; see [ROADMAP.md](./ROADMAP.md)
-and [OPEN_QUESTIONS.md](./OPEN_QUESTIONS.md) OQ-1 for the going-public
-posture.
+External use of the public repo is permitted under Apache-2.0 but no
+support commitment is offered and no external-onboarding path is
+documented per ADR-006. Forks consumed externally are the forker's
+responsibility. Whether scope expands beyond six internal consumers is
+gated on ADR-006 supersession; see
+[OPEN_QUESTIONS.md](./OPEN_QUESTIONS.md) OQ-1 and OQ-11.
 
 ## License
 
