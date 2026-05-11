@@ -1,6 +1,6 @@
-# Phase P7 — Onboarding 5 other repos
+# Phase P7 — Onboarding 7 internal consumers
 
-**Goal:** Add caller stubs to prix-guesser, arxiv-sanity-mcp, f1-modeling, epistemic-agency, scholardoc — each consuming the agentic-ops `v1` reusable workflow with per-repo configuration.
+**Goal:** Add caller stubs to prix-guesser, arxiv-sanity-mcp, f1-modeling, epistemic-agency, scholardoc, vigil, and agentic-ops itself (self-consumer pattern per [ADR-009](../../docs/adr/ADR-009-consumer-cap-relaxation.md) §Decision §2) — each consuming the agentic-ops `v1` reusable workflow with per-repo configuration.
 
 **Status:** pending
 
@@ -14,7 +14,7 @@
 
 ## Phase exit postconditions
 
-- All 5 target repos have caller stubs merged
+- All 7 target repos have caller stubs merged
 - Each repo's `@claude review` (or first enabled mode) triggers successfully on a benign comment
 - Per-repo `enabled_modes` reflects the table below
 
@@ -27,10 +27,10 @@
 | f1-modeling | `["review","quick","deep","audit:tech-debt"]` | `notebooks/*.ipynb`, `src/**/*.py` | `Bash(ruff:*)` |
 | epistemic-agency | `["review","quick","deep","audit:forward-compat"]` | `src/**/*.ts`, `docs/` | `Bash(eslint:*)` |
 | scholardoc | `["review","quick","deep","survey","audit"]` | `src/**/*.py`, `docs/` | `Bash(ruff:*),Bash(mypy:*)` |
-| vigil | `["review","quick","deep","audit:agential-dx"]` | `""` | `""` |
-| agentic-ops | `["review","quick","deep","opus","survey","audit","gates"]` | `.github/workflows/review.yml`, `.github/scripts/`, `docs/adr/` | `Bash(actionlint:*),Bash(shellcheck:*),Bash(yamllint:*)` |
+| vigil | `["review","quick","deep","audit"]` | `""` | `""` |
+| agentic-ops | `["review","quick","deep","opus","survey","audit"]` | `.github/workflows/review.yml`, `.github/scripts/`, `docs/adr/` | `""` |
 
-## Per-repo subtasks (5x; n in {1..5})
+## Per-repo subtasks (7x; n in {1..7})
 
 ### P7-T<n>-1 — Verify repo state
 
@@ -63,11 +63,11 @@
 
 ## Phase total estimate
 
-30 min × 5 repos = ~2.5 hrs serialized. Can be parallelized across the 5 repos via concurrent agent calls; in parallel, wall-clock approximates a single-repo onboarding plus a small coordination overhead. Per-repo CI + CodeRabbit wait time dominates the critical path; agent-side stub authoring is roughly 5–10 min per repo.
+30 min × 7 repos = ~3.5 hrs serialized. Can be parallelized across the 7 repos via concurrent agent calls; in parallel, wall-clock approximates a single-repo onboarding plus a small coordination overhead. The agentic-ops self-consumer case may be slightly faster since the kernel and the caller stub are both in this repo (no cross-repo coordination for stub authoring). Per-repo CI + CodeRabbit wait time dominates the critical path; agent-side stub authoring is roughly 5–10 min per repo.
 
 ## Parallelization guidance
 
-- The 5 per-repo subtask streams are independent once P4 has merged. Spawn one agent call per repo with a self-contained brief (target repo, enabled_modes row, review_focus_paths, extra_allowed_tools, agents_md_path, repo_label).
+- The 7 per-repo subtask streams are independent once P4 has merged. Spawn one agent call per repo with a self-contained brief (target repo, enabled_modes row, review_focus_paths, extra_allowed_tools, agents_md_path, repo_label).
 - Cross-repo dependencies are limited to the shared `v1` tag in `loganrooks/agentic-ops`. Do not advance the `v1` tag mid-phase — pin to the tag that was current at phase entry to prevent caller stubs racing against unrelated workflow updates.
 - Aggregate results back into STATE.md keyed by repo so downstream phases (P8 observability, P9 missed-signal) can enumerate onboarded callers programmatically.
 

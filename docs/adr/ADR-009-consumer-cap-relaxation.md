@@ -86,12 +86,20 @@ file; the kernel is consumed, not invoked directly. Review fires
 only on explicit `@claude` triggers on agentic-ops PRs and issues.
 No autonomous self-triggering; no infinite-loop surface.
 
-**3. ADR-006 §§1, 3, 4, 5 retained verbatim.** This ADR
-relaxes only the numeric cap in §2. The auth model (single-
-principal plan auth), the no-installer-for-external-use
-commitment, the repo-visibility-unchanged commitment, and the
-forks-not-supported commitment are unchanged and continue to
-govern.
+**3. ADR-006 §§1, 3, 4, 5 retained.** This ADR relaxes only the
+numeric cap in §2. The auth model (single-principal plan auth),
+the no-installer-for-external-use commitment, the
+repo-visibility-unchanged commitment, and the
+forks-not-supported commitment all remain in force as policy.
+ADR-006 §3's parenthetical phrasing "the six internal consumers"
+is incidental to the install-mechanism policy it states — the
+policy applies to *the named-internal-consumer set as defined by
+§2*, which this ADR raises to eight. The numeric reference in
+§3 is interpretive (cites the count at the time ADR-006 was
+written) and is not subject to a separate inline note per the
+"single inline note per supersession relationship" convention in
+[`docs/adr/README.md`](README.md) §"Editing rule"; the §2 inline
+note plus this clarification are sufficient.
 
 **4. Named-set discipline preserved.** Onboarding a ninth
 consumer — *internal or external* — requires a later ADR

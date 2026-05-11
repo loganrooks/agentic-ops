@@ -96,9 +96,14 @@ requires a superseding ADR.
 External use of the public repo is permitted under Apache-2.0 but no
 support commitment is offered and no external-onboarding path is
 documented per ADR-006. Forks consumed externally are the forker's
-responsibility. Whether scope expands beyond the eight named
-internal consumers is gated on ADR-006's three-prong supersession
-gate; see [OPEN_QUESTIONS.md](./OPEN_QUESTIONS.md) OQ-1 and OQ-11.
+responsibility. Adding a ninth named internal consumer requires a
+later ADR superseding ADR-009 (the same named-set discipline ADR-006
+§2 established). Moving beyond bounded-internal-consumer scope —
+toward open-source-product framing — is the stronger gate and
+requires ADR-006's three-prong supersession (OQ-1 resolved toward
+open-source product + ADR-007 prerequisites met + new auth-model
+ADR accepted). See [OPEN_QUESTIONS.md](./OPEN_QUESTIONS.md) OQ-1
+and OQ-11.
 
 ## License
 

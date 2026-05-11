@@ -16,10 +16,14 @@ with this OQ has been resolved separately — LICENSE is Apache-2.0
 previously misstated this as "TBD." That is a factual sync, not an
 OQ-1 resolution. OQ-1 itself — whether the substrate is a
 public-facing product with a maintenance commitment — remains
-deferred per [ADR-006](docs/adr/ADR-006-bounded-deployment-scope.md),
+deferred per [ADR-006](docs/adr/ADR-006-bounded-deployment-scope.md)
+(as partially superseded re: §2 by
+[ADR-009](docs/adr/ADR-009-consumer-cap-relaxation.md)),
 which explicitly rejected resolving OQ-1 prematurely and bounded
-the substrate to six internal consumers until the ADR-006 trigger
-conditions are met.
+the substrate to a named-internal-consumer set (now eight per
+ADR-009: codebase-mapper, prix-guesser, arxiv-sanity-mcp,
+f1-modeling, epistemic-agency, scholardoc, vigil, and agentic-ops
+itself) until the ADR-006 trigger conditions are met.
 
 **Question:** Is `agentic-ops` something the user maintains for their
 own repos, or a public-facing product with maintenance commitment to
@@ -42,8 +46,9 @@ because it merely confirms the existing ADR-006 posture.
   feels heavy enough that supporting strangers' edge cases would tip
   into untenable
 
-**Current leaning:** personal-tooling-in-public-repo bounded to six
-internal consumers per ADR-006. License is Apache-2.0; no support
+**Current leaning:** personal-tooling-in-public-repo bounded to the
+eight named internal consumers per ADR-006 §2 (as partially
+superseded by ADR-009). License is Apache-2.0; no support
 commitments offered. Forks consumed externally are the forker's
 responsibility per ADR-006. If demand emerges, OQ-1 revisits through
 ADR-006-supersession work — not through a unilateral resolution
@@ -260,9 +265,11 @@ readiness phase, or piecemeal as need surfaces?
 
 **Deferred:** until OQ-1 resolves. The shape can't be sized
 meaningfully before the empirical signal from internal-scale operation
-(P7 onboarding of 5 internal repos + P8 observability) tells us which
-TC-7..TC-11 mitigations from `docs/adr/ADR-007-threat-model-gating.md`
-are load-bearing in practice.
+(P7 onboarding of the 7 named internal consumers post-CBM per
+[ADR-009](docs/adr/ADR-009-consumer-cap-relaxation.md), plus P8
+observability) tells us which TC-7..TC-11 mitigations from
+`docs/adr/ADR-007-threat-model-gating.md` are load-bearing in
+practice.
 
 **What would resolve:**
 - (spike phase) we want concrete artifacts (auth-model comparison,
