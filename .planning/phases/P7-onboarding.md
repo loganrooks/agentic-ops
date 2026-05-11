@@ -45,9 +45,17 @@ install steps for those tools, this row should be revisited.
 
 **Note on `vigil` row.** Both columns are empty pending
 maintainer-confirmed values for vigil's contract surfaces and
-static-analysis stack. The workflow defaults (`""` treats diff
-uniformly; no extra tools) are valid; the row is dispatchable
-as-is. Refine before or during P7-T<n>-3 if specifics are known.
+static-analysis stack. The row is dispatchable as-is: the
+kernel's `Assemble prompt fragments` step
+(`.github/workflows/review.yml` `render_paths_block` function,
+`if [[ -z "${content//[[:space:]]/}" ]]`) renders "(none
+configured)" when `review_focus_paths` is whitespace-only, and
+the `Assemble allowlist` step
+(`if [[ -n "${EXTRA//[[:space:]]/}" ]]`) appends nothing when
+`extra_allowed_tools` is empty. Refine before or during
+P7-T<n>-3 if specifics are known. The same guards apply to the
+agentic-ops row's empty `extra_allowed_tools` (the allowlist is
+not widened when the input is empty).
 
 ## Per-repo subtasks (7x; n in {1..7})
 
