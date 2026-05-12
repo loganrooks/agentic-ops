@@ -62,6 +62,16 @@ jobs:
       claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
 
+> **The example shows the kernel default `enabled_modes`** — six
+> modes plus `gates` (which the kernel default `enabled_modes`
+> omits but the kernel supports). Do not copy verbatim during
+> onboarding. Per-repo onboarding *overrides* this with the row
+> from [`.planning/phases/P7-onboarding.md`](.planning/phases/P7-onboarding.md)
+> §"Per-repo configuration", which is typically more conservative
+> (`["review","quick","deep"]` plus a single audit lens or
+> `survey`). Over-enabling adds cost and review surface without
+> the rollout plan opting the consumer in.
+
 Per-repo customizable inputs (defaults in `.github/workflows/review.yml`):
 
 - `enabled_modes` — modes from the central registry; out-of-list
@@ -118,11 +128,18 @@ Values for the named consumers are tabled in
    judgment.
 5. **`review_focus_paths`, `extra_allowed_tools`.** Use the P7
    table; values reflect the consumer's contract surfaces and
-   static-analysis stack. Review each `extra_allowed_tools` entry
-   against [ADR-004](docs/adr/ADR-004-allowlist-policy.md) — in
-   particular, compile-capable tools (e.g., `tsc`, `cargo`,
-   `tsc:*` wildcards) must be pinned to non-emitting invocations
-   only.
+   static-analysis stack. **Before copying any `extra_allowed_tools`
+   value verbatim, audit it against
+   [ADR-004](docs/adr/ADR-004-allowlist-policy.md) §"Forbidden
+   entries".** Specifically known unsafe patterns currently in the
+   P7 table that must be tightened before use:
+   - `Bash(tsc:*)` (prix-guesser, epistemic-agency) — ADR-004
+     allows `tsc` only with `--noEmit`. Tighten to
+     `Bash(tsc:--noEmit:*)` or omit before pasting into the
+     consumer stub.
+   - Any wildcard `Bash(<tool>:*)` for a compile-capable tool
+     (cargo, npm build, make, cmake) — pin to non-emitting flags
+     only.
 
 ## Per-repo agent brief
 
@@ -160,9 +177,17 @@ fresh-context agent must include all of the following:
     (>15 min CI-green without CodeRabbit review;
     `@coderabbitai review` does not unstick within 10 min).
 
-  Canonical wire format and resolution paths are in
-  [`.planning/HUMAN-GATES.md`](.planning/HUMAN-GATES.md). When a
-  gate fires, the agent records the escalation, moves to the
+  Gate triggers and resolution prose are in
+  [`.planning/HUMAN-GATES.md`](.planning/HUMAN-GATES.md); the
+  actual write/update/index steps for an escalation (where to
+  write the escalation file, how to index it, when to mark
+  resolved) are in
+  [`.planning/EXECUTION-MODEL.md`](.planning/EXECUTION-MODEL.md)
+  §"Escalation procedure". An agent that hits a gate consults
+  both — HUMAN-GATES.md for "which gate is this and how do I
+  describe the situation"; EXECUTION-MODEL.md for "where do I
+  write it and what comes next." When a gate fires, the agent
+  records the escalation per EXECUTION-MODEL.md, moves to the
   next consumer if one is queued, and resumes the gated repo
   when the gate clears.
 
