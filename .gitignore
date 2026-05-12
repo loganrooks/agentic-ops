@@ -8,3 +8,21 @@
 *~
 .vscode/
 .idea/
+
+# BEGIN agentic-mail
+.mail/claude/inbox/
+.mail/claude/processed/
+.mail/claude/archive/**/*.md
+!.mail/claude/archive/.gitkeep
+.mail/codex/inbox/
+.mail/codex/processed/
+.mail/codex/archive/**/*.md
+!.mail/codex/archive/.gitkeep
+.mail/human/inbox/
+.mail/human/processed/
+.mail/human/archive/**/*.md
+!.mail/human/archive/.gitkeep
+.mail/attachments/
+.mail/.audit.jsonl
+.mail/.budget.json
+# END agentic-mail
