@@ -56,9 +56,12 @@ capability beyond PR review.
 
 ### Phase M1 — Onboard remaining repos
 
-Add `agentic-ops` consumer stubs to (the named internal-consumer
-set per [ADR-009](docs/adr/ADR-009-consumer-cap-relaxation.md)
-which partially supersedes ADR-006 §2):
+Add `agentic-ops` consumer stubs to the remaining post-CBM
+members of the ADR-009 named-internal-consumer set
+(`codebase-mapper` was onboarded in S3 above; the seven repos
+below are M1's scope per
+[ADR-009](docs/adr/ADR-009-consumer-cap-relaxation.md) which
+partially supersedes ADR-006 §2):
 - `loganrooks/prix-guesser`
 - `loganrooks/arxiv-sanity-mcp`
 - `loganrooks/f1-modeling`

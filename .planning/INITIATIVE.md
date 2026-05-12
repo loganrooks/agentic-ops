@@ -84,11 +84,17 @@ autonomous execution:
 
 | ID | Decision | Status |
 |---|---|---|
-| ADR-001 | Mode taxonomy: 5 existing + `survey` + `audit`; audit has lens registry | accepted |
-| ADR-002 | Parallelism via GHA matrix fan-out (skip L2) | accepted |
+| ADR-001 | Mode taxonomy: 5 existing + `survey` + `audit`; audit has lens registry | accepted; amended by ADR-008 |
+| ADR-002 | Parallelism via GHA matrix fan-out (skip L2) | accepted; partially superseded by ADR-008 (re: L3 routing) |
 | ADR-003 | Versioning: `v1` floating + additivity; `v2` for breaking | accepted |
 | ADR-004 | Allowlist: narrow now; `extra_allowed_tools` for static analysis only | accepted |
-| ADR-005 | Audit/survey output: comment + multi-comment split if needed | accepted (provisional) |
+| ADR-005 | Audit/survey output: comment + multi-comment split if needed | accepted (provisional); amended by ADR-008 |
+| ADR-006 | Deployment scope bounded to internal consumers until OQ-1 resolves | accepted; partially superseded by ADR-009 (re: §2 consumer cap) |
+| ADR-007 | Threat-model gating for wide deployment | accepted |
+| ADR-008 | L3 mode variants — explicit-trigger routing + naming | accepted |
+| ADR-009 | Consumer cap relaxation — named-internal-consumer set raised from 6 to 8 | accepted |
+
+For the canonical, always-current list, see [`docs/adr/`](../docs/adr/).
 
 Cross-cutting commitments (defense-in-depth guardrails, self-CI) are
 documented in `SECURITY.md` and the CI workflow itself, not as

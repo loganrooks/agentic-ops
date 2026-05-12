@@ -106,7 +106,8 @@ empty `extra_allowed_tools` (the allowlist is not widened).
 
 ## Parallelization guidance
 
-- The 7 per-repo subtask streams are independent once P4 has merged. Spawn one agent call per repo with a self-contained brief (target repo, enabled_modes row, review_focus_paths, extra_allowed_tools, agents_md_path, repo_label).
+- Six of the seven per-repo subtask streams (prix-guesser, arxiv-sanity-mcp, f1-modeling, epistemic-agency, scholardoc, vigil) are independent once P4 has merged. Spawn one agent call per repo with a self-contained brief (target repo, enabled_modes row, review_focus_paths, extra_allowed_tools, agents_md_path, repo_label).
+- **The seventh stream — agentic-ops self-consumer — has a prerequisite** beyond P4: [ADR-009](../../docs/adr/ADR-009-consumer-cap-relaxation.md) §Decision §2 requires that the kernel's `Determine central ref` step's behavior be empirically verified (or patched) before the agentic-ops caller stub lands, to ensure `@v1` self-review actually reviews against the released kernel rather than the caller-run's in-flight ref. Do NOT spawn the agentic-ops stream in parallel with the other six until this prerequisite is cleared.
 - Cross-repo dependencies are limited to the shared `v1` tag in `loganrooks/agentic-ops`. Do not advance the `v1` tag mid-phase — pin to the tag that was current at phase entry to prevent caller stubs racing against unrelated workflow updates.
 - Aggregate results back into STATE.md keyed by repo so downstream phases (P8 observability, P9 missed-signal) can enumerate onboarded callers programmatically.
 

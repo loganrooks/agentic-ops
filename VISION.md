@@ -11,8 +11,9 @@ a specific vendor or stage of their project's lifecycle.
 
 Three things are simultaneously true:
 
-1. **Most of the user's code is AI-authored.** Across six active personal
-   repos, AI agents do most of the coding. Human review is the safety layer,
+1. **Most of the user's code is AI-authored.** Across eight active personal
+   repos (the named internal-consumer set per ADR-006 / ADR-009), AI
+   agents do most of the coding. Human review is the safety layer,
    but humans can't keep up with AI velocity, and what humans miss is exactly
    the kind of subtle wrongness AI produces — plausible-but-wrong references,
    silent fallbacks, contract drift, speculative scaffolding, overclaim
