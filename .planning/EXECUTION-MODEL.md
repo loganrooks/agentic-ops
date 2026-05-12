@@ -11,6 +11,52 @@ mechanical postconditions, checkpoint-per-phase, session-end and
 session-resume protocols, escalation flow with `RESOLVED:` and
 `BLOCKED:` markers, done detection via `DONE.md` contract.
 
+## Agent-to-agent mailbox channel (post-install)
+
+This repo installs `agentic-mail` `v0.1.0` as an advisory mailbox
+channel between Claude Code and Codex CLI. The installed protocol spec
+is `docs/protocols/AGENT-MAILBOX-v0.md` in
+`loganrooks/agentic-mail` at tag `v0.1.0`; the local copied runtime
+lives under `.mail/`.
+
+The mailbox is coordination context, not authority. It is appropriate
+for peer review notes, handoff questions, implementation context,
+smoke-test pings, and low-stakes disagreement. It does not replace
+human escalation, PR review, CodeRabbit, CI, branch protection, ADR
+discipline, or the explicit HUMAN-GATE checkpoints in this execution
+model.
+
+High-stakes decisions still route to the maintainer through the normal
+escalation path. That includes credentials and secrets, repo settings,
+branch protection, force-pushes, release tags, ADR creation or
+supersession, allowlist changes, security-impacting changes, and any
+workflow-contract change whose blast radius is unclear.
+
+Sycophancy mitigations are part of the channel contract. Agents should
+use mailbox messages to disagree explicitly when evidence conflicts
+with a plan, and `kind: answer` messages require an `evidence` field.
+Thread and phase message caps remain in force so the mailbox cannot
+become an auto-loop that amplifies agreement without fresh evidence.
+
+If a message includes `plan_sha`, recipients compare it with the
+current plan or state artifact before relying on the message. A mismatch
+is treated as plan-version drift: record the mismatch, avoid acting on
+stale instructions as authoritative, and escalate when the drift affects
+the current task contract.
+
+For observability, use `.mail/bin/mail-status --workspace <repo>` to
+inspect unread counts, active threads, expired messages, audit entries,
+and phase budget counters. The runtime audit log is `.mail/.audit.jsonl`;
+it is intentionally ignored by git, while the installed CLI scripts and
+archive directory placeholders are committed so the repo pins the copied
+runtime to `agentic-mail` `v0.1.0`.
+
+Hook delivery is intentionally asymmetric in v0. Codex receives pending
+mail through the installed `Stop` hook, which emits a JSON continuation
+block. Claude Code receives pending mail through the installed
+`SessionStart` hook, which emits mailbox context at session boundaries.
+Both hooks are cwd-gated to this repo.
+
 ## The `GO` command
 
 ### What the user types

@@ -56,16 +56,27 @@ capability beyond PR review.
 
 ### Phase M1 — Onboard remaining repos
 
-Add `agentic-ops` consumer stubs to:
+Add `agentic-ops` consumer stubs to the remaining post-CBM
+members of the ADR-009 named-internal-consumer set
+(`codebase-mapper` was onboarded in S3 above; the seven repos
+below are M1's scope per
+[ADR-009](docs/adr/ADR-009-consumer-cap-relaxation.md) which
+partially supersedes ADR-006 §2):
 - `loganrooks/prix-guesser`
 - `loganrooks/arxiv-sanity-mcp`
 - `loganrooks/f1-modeling`
 - `loganrooks/epistemic-agency`
 - `loganrooks/scholardoc`
+- `loganrooks/vigil` (added per ADR-009)
+- `loganrooks/agentic-ops` itself — self-consumer pattern, added
+  per ADR-009; kernel reusable workflow at
+  `.github/workflows/review.yml` is consumed by a distinct caller
+  stub at `.github/workflows/claude-review.yml` via `@v1`
 
 Each gets a thin overlay naming its contract surfaces. Surfaces vary
 significantly across these repos (CLI, MCP server, data-sci notebook,
-philosophy reading tool, doc workflow), which is the point — the
+philosophy reading tool, doc workflow, monitoring substrate,
+review-substrate self-consumer), which is the point — the
 overlay model has to handle this divergence.
 
 ### Phase M2 — Reviewer-types experiment
@@ -106,8 +117,9 @@ Weekly cron generates a "devops health" issue per repo. Catches drift
 that wasn't tied to a specific PR (stale deps, README untouched in 6
 months, missing CODEOWNERS, etc.).
 
-**Phase end-state:** the centralized system serves 6 repos, has 3+
-specialists, runs drift detection, generates weekly health reports.
+**Phase end-state:** the centralized system serves 8 internal
+repos (the ADR-009 named-consumer set), has 3+ specialists, runs
+drift detection, generates weekly health reports.
 Architecture (orchestrator + specialists + registry + per-repo overlays)
 is validated.
 
