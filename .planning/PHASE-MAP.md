@@ -24,7 +24,7 @@ P5  D — Survey mode L3 (matrix fan-out) — conditional on empirical signal
   ↓
 P6  E — Audit mode L3 (matrix fan-out per lens) — conditional on D succeeding
   ↓
-P7  F — Onboarding 5 other repos
+P7  F — Onboarding 7 internal consumers (per ADR-009)
   ↓
 P8  G — Observability + cost monitoring
   ↓
@@ -44,7 +44,7 @@ P9  Final — DONE.md, summary, archive
 | EMPIRICAL-GATE | Run survey + audit on CBM artifacts; decide whether L3 is needed | n/a (decision file) | `phases/EMPIRICAL-GATE.md` |
 | **P5** | `survey` L3: zone-map → matrix per zone → synthesis (conditional) | `feat/p5-survey-l3` | `phases/P5-survey-mode-l3.md` |
 | **P6** | `audit` L3: lens-plan → matrix per lens → opus synthesis (conditional) | `feat/p6-audit-l3` | `phases/P6-audit-mode-l3.md` |
-| **P7** | Onboard 5 other repos via per-repo caller stubs | one branch per target repo | `phases/P7-onboarding.md` |
+| **P7** | Onboard 7 internal consumers (prix-guesser, arxiv-sanity-mcp, f1-modeling, epistemic-agency, scholardoc, vigil, agentic-ops self-consumer) per [ADR-009](../docs/adr/ADR-009-consumer-cap-relaxation.md) via per-repo caller stubs | one branch per target repo | `phases/P7-onboarding.md` |
 | **P8** | Aggregator workflow, missed-signal template, observability docs | `feat/p8-observability` | `phases/P8-observability.md` |
 | **P9** | DONE.md, archive auto-execution state, final commit | `chore/p9-archive-<timestamp>` | `phases/P9-final.md` |
 

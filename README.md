@@ -43,7 +43,8 @@ working together, growing with the consuming repos:
 ## Why this exists
 
 The user behind this project ([loganrooks](https://github.com/loganrooks))
-maintains six personal repos where most code is AI-authored. AI ships
+maintains eight personal repos where most code is AI-authored (the
+named internal-consumer set per ADR-006 / ADR-009). AI ships
 plausible-but-wrong code at a velocity human review can't keep up with;
 existing tools (CodeRabbit, Codex, Diamond) catch patterns but don't compose
 across vendors, don't span lifecycle stages, and don't evolve with the
@@ -73,28 +74,37 @@ codebase. This is the missing piece.
 - [OPEN_QUESTIONS.md](./OPEN_QUESTIONS.md) — explicit deferrals, tradeoffs
   not yet resolved, and the criteria that would resolve each one.
 - [docs/adr/](./docs/adr/) — architecture decisions
-  (ADRs 001-008 cover mode taxonomy, parallelism architecture, versioning,
+  (ADRs 001-009 cover mode taxonomy, parallelism architecture, versioning,
   allowlist policy, audit output format, bounded deployment scope,
-  threat-model gating, and L3 mode variants).
+  threat-model gating, L3 mode variants, and consumer cap relaxation).
 - [AGENTS.md](./AGENTS.md) — operative discipline for contributors
   (human or agentic).
 - [SECURITY.md](./SECURITY.md) — threat model and reporting.
 
 ## Who this is for
 
-Six internal consumers per
-[ADR-006](docs/adr/ADR-006-bounded-deployment-scope.md):
+Eight internal consumers per
+[ADR-006](docs/adr/ADR-006-bounded-deployment-scope.md) (as
+partially superseded by
+[ADR-009](docs/adr/ADR-009-consumer-cap-relaxation.md) re: §2):
 [codebase-mapper](https://github.com/loganrooks/codebase-mapper),
-prix-guesser, arxiv-sanity-mcp, f1-modeling, epistemic-agency, scholardoc.
-ADR-006 caps the consumer set at six; relaxing the cap requires a
-superseding ADR.
+prix-guesser, arxiv-sanity-mcp, f1-modeling, epistemic-agency,
+scholardoc, vigil, and agentic-ops itself (self-consumer pattern;
+see ADR-009 §Decision). ADR-006 (as partially superseded by
+ADR-009) caps the consumer set at eight; relaxing the cap further
+requires a superseding ADR.
 
 External use of the public repo is permitted under Apache-2.0 but no
 support commitment is offered and no external-onboarding path is
 documented per ADR-006. Forks consumed externally are the forker's
-responsibility. Whether scope expands beyond six internal consumers is
-gated on ADR-006 supersession; see
-[OPEN_QUESTIONS.md](./OPEN_QUESTIONS.md) OQ-1 and OQ-11.
+responsibility. Adding a ninth named internal consumer requires a
+later ADR superseding ADR-009 (the same named-set discipline ADR-006
+§2 established). Moving beyond bounded-internal-consumer scope —
+toward open-source-product framing — is the stronger gate and
+requires ADR-006's three-prong supersession (OQ-1 resolved toward
+open-source product + ADR-007 prerequisites met + new auth-model
+ADR accepted). See [OPEN_QUESTIONS.md](./OPEN_QUESTIONS.md) OQ-1
+and OQ-11.
 
 ## License
 
