@@ -205,8 +205,13 @@ trigger in the target repo:
   non-PR comments).
 
 Do not smoke-test on a real review-bearing PR — that conflates
-first-run validation with substantive review output. Per
-P7-T<n>-5 §"Notes."
+first-run validation with substantive review output. The
+"benign no-op" smoke-test convention is specified in
+[`.planning/phases/P7-onboarding.md`](.planning/phases/P7-onboarding.md)
+§Notes (bullet beginning "The smoke-test comment in P7-T<n>-5
+should be a benign no-op…"). `P7-T<n>-5` is the templated form
+of the smoke-test subtask (one per consumer; `<n>` is the
+per-repo position 1..7).
 
 A successful smoke test means: workflow fires, Claude posts a
 short comment via `post-claude-review.sh`, no `allowedTools`
