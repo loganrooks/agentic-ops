@@ -63,8 +63,10 @@ jobs:
 ```
 
 > **The example shows the kernel default `enabled_modes`** — six
-> modes plus `gates` (which the kernel default `enabled_modes`
-> omits but the kernel supports). Do not copy verbatim during
+> modes (`review`, `quick`, `deep`, `opus`, `survey`, `audit`).
+> `gates` is supported by the kernel but is *not* in the default
+> array; it must be opted into explicitly per-repo (and requires
+> `gates_paths`). Do not copy the example verbatim during
 > onboarding. Per-repo onboarding *overrides* this with the row
 > from [`.planning/phases/P7-onboarding.md`](.planning/phases/P7-onboarding.md)
 > §"Per-repo configuration", which is typically more conservative
@@ -133,13 +135,18 @@ Values for the named consumers are tabled in
    [ADR-004](docs/adr/ADR-004-allowlist-policy.md) §"Forbidden
    entries".** Specifically known unsafe patterns currently in the
    P7 table that must be tightened before use:
-   - `Bash(tsc:*)` (prix-guesser, epistemic-agency) — ADR-004
-     allows `tsc` only with `--noEmit`. Tighten to
-     `Bash(tsc:--noEmit:*)` or omit before pasting into the
-     consumer stub.
+   - `Bash(tsc:*)` (prix-guesser only — `epistemic-agency`'s row
+     has `Bash(eslint:*)` and does not need tightening here).
+     ADR-004 allows `tsc` only with `--noEmit`. Per Claude Code
+     permission patterns, the `:*` wildcard only matches at the
+     end of a pattern, so `Bash(tsc:--noEmit:*)` would match a
+     literal `tsc:--noEmit` invocation, not `tsc --noEmit`.
+     Tighten to `Bash(tsc --noEmit *)` (space-form pattern) or
+     omit the entry before pasting into the consumer stub.
    - Any wildcard `Bash(<tool>:*)` for a compile-capable tool
      (cargo, npm build, make, cmake) — pin to non-emitting flags
-     only.
+     only using the space-form pattern
+     `Bash(<tool> <safe-flag> *)`.
 
 ## Per-repo agent brief
 
@@ -166,8 +173,15 @@ fresh-context agent must include all of the following:
   conversations resolved; maintainer signal; smoke-test
   succeeds (next §).
 - **Escalation triggers** — agent halts and escalates per the
-  matching gate, recording the escalation in
-  `.planning/auto-execution/escalations/`:
+  matching gate, writing the escalation file at the canonical
+  EXECUTION-MODEL path
+  `.planning/auto-execution/escalations/ESCALATION-<ISO8601>.md`
+  (timestamp e.g. `2026-05-12T01:30:00Z`) and appending to the
+  `ESCALATIONS.md` index per
+  [`.planning/EXECUTION-MODEL.md`](.planning/EXECUTION-MODEL.md)
+  §"Escalation procedure". An agent that writes to a
+  non-canonical path will not be seen by `GO`-resume checks and
+  the gate will be bypassed instead of halting on it:
   - **HUMAN-GATE-3** — caller stub edits on a target repo
     requiring maintainer eyes beyond the standard onboarding
     shape.
@@ -211,7 +225,8 @@ first-run validation with substantive review output. The
 §Notes (bullet beginning "The smoke-test comment in P7-T<n>-5
 should be a benign no-op…"). `P7-T<n>-5` is the templated form
 of the smoke-test subtask (one per consumer; `<n>` is the
-per-repo position 1..7).
+per-repo position, indexed across the consumer set defined in
+P7's per-repo configuration table).
 
 A successful smoke test means: workflow fires, Claude posts a
 short comment via `post-claude-review.sh`, no `allowedTools`
