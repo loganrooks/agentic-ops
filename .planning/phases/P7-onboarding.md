@@ -1,5 +1,7 @@
 # Phase P7 — Onboarding 7 internal consumers
 
+> Updated 2026-05-12: aligns with [ADR-009](../../docs/adr/ADR-009-consumer-cap-relaxation.md) (consumer set extended to 8 — vigil + agentic-ops self-consumer added) and [`ONBOARDING.md`](../../ONBOARDING.md) (executable onboarding recipe; replaces the deferred Appendix A.12 reference).
+
 **Goal:** Add caller stubs to prix-guesser, arxiv-sanity-mcp, f1-modeling, epistemic-agency, scholardoc, vigil, and agentic-ops itself (self-consumer pattern per [ADR-009](../../docs/adr/ADR-009-consumer-cap-relaxation.md) §Decision §2) — each consuming the agentic-ops `v1` reusable workflow with per-repo configuration.
 
 **Status:** pending
@@ -9,6 +11,8 @@
 ## Phase entry preconditions
 
 - CHECKPOINT-P4 exists (audit + survey L1 stable; L3 may or may not be done)
+- [ADR-009](../../docs/adr/ADR-009-consumer-cap-relaxation.md) merged (vigil + agentic-ops are members of the named-internal-consumer set per §Decision §1; agentic-ops self-consumer additionally requires the workflow-correctness verification per §Decision §2 before its caller stub lands)
+- [`ONBOARDING.md`](../../ONBOARDING.md) exists at repo root (executable caller-stub recipe consumed by P7-T<n>-3)
 - Each target repo has `.github/workflows/` directory or can have one created
 - Each target repo has `CLAUDE_CODE_OAUTH_TOKEN` available as a secret (if not, HUMAN-GATE — agent escalates)
 
@@ -85,6 +89,7 @@ empty `extra_allowed_tools` (the allowlist is not widened).
 ### P7-T<n>-3 — Write caller stub
 
 - Branch: `feat/agentic-ops-onboarding` in target repo
+- Use [`ONBOARDING.md`](../../ONBOARDING.md) §"The minimal caller stub" as the executable recipe. The canonical inline exemplar lives in the Consumer caller stub block of [`.github/workflows/review.yml`](../../.github/workflows/review.yml) header; CBM's caller stub at `f6fe379` is the working reference instance.
 - Caller stub mirrors CBM's pattern; uses `loganrooks/agentic-ops/.github/workflows/review.yml@v1`
 - Includes per-repo enabled_modes, review_focus_paths, extra_allowed_tools, agents_md_path, repo_label
 
@@ -122,6 +127,8 @@ empty `extra_allowed_tools` (the allowlist is not widened).
 
 - `phases/P4-extra-allowed-tools.md` — must merge first (input is consumed by per-repo `extra_allowed_tools` entries)
 - ADR-001 — mode taxonomy (per-repo `enabled_modes` scope)
+- [ADR-009](../../docs/adr/ADR-009-consumer-cap-relaxation.md) — consumer cap relaxation (named-internal-consumer set extended to 8; §Decision §2 workflow-correctness prerequisite for the agentic-ops self-consumer stream)
 - HUMAN-GATE-3 in `HUMAN-GATES.md` — CBM caller stub edits (analogous flow per repo)
 - AGENTS.md — operative discipline this phase propagates to each onboarded repo
-- Appendix A.12 in `PLAN-snapshot.md` — caller stub template referenced by P7-T<n>-3
+- [`ONBOARDING.md`](../../ONBOARDING.md) — executable onboarding recipe consumed by P7-T<n>-3 (replaces the deferred Appendix A.12 reference)
+- [`.github/workflows/review.yml`](../../.github/workflows/review.yml) — kernel reusable workflow; the header's Consumer caller stub block is the canonical caller-stub exemplar
