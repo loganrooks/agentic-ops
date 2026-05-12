@@ -27,8 +27,8 @@
 | f1-modeling | `["review","quick","deep","audit:tech-debt"]` | `notebooks/*.ipynb`, `src/**/*.py` | `Bash(ruff:*)` |
 | epistemic-agency | `["review","quick","deep","audit:forward-compat"]` | `src/**/*.ts`, `docs/` | `Bash(eslint:*)` |
 | scholardoc | `["review","quick","deep","survey","audit"]` | `src/**/*.py`, `docs/` | `Bash(ruff:*),Bash(mypy:*)` |
-| vigil | `["review","quick","deep","audit"]` | `""` | `""` |
-| agentic-ops | `["review","quick","deep","opus","survey","audit","gates"]` | `.github/workflows/review.yml`, `.github/scripts/`, `docs/adr/` | `""` (see note below) |
+| vigil | `["review","quick","deep","audit"]` | _(empty — see note)_ | _(empty — see note)_ |
+| agentic-ops | `["review","quick","deep","opus","survey","audit","gates"]` | `.github/workflows/review.yml`, `.github/scripts/`, `docs/adr/` | _(empty — see note)_ |
 
 **Note on agentic-ops `enabled_modes`.** The row reflects the full
 ADR-001 seven-mode taxonomy. `gates` is enabled but the P7 table
@@ -53,19 +53,21 @@ workflow/script/ADR files and reasons about them); deterministic
 linting stays in CI. If a future kernel-workflow change adds
 install steps for those tools, this row should be revisited.
 
-**Note on `vigil` row.** Both columns are empty pending
-maintainer-confirmed values for vigil's contract surfaces and
-static-analysis stack. The row is dispatchable as-is: the
-kernel's `Assemble prompt fragments` step
-(`.github/workflows/review.yml` `render_paths_block` function,
+**Note on `_(empty — see note)_` cells.** Where a table cell is
+shown as `_(empty — see note)_`, the caller stub should *omit*
+that input entirely, or set it to an empty/missing YAML value
+(e.g., `review_focus_paths: ""` is acceptable, but **do not paste
+the literal marker text into the YAML**). The kernel handles
+empty/whitespace-only inputs via two guards: the `Assemble prompt
+fragments` step (`.github/workflows/review.yml`
+`render_paths_block` function,
 `if [[ -z "${content//[[:space:]]/}" ]]`) renders "(none
-configured)" when `review_focus_paths` is whitespace-only, and
-the `Assemble allowlist` step
-(`if [[ -n "${EXTRA//[[:space:]]/}" ]]`) appends nothing when
-`extra_allowed_tools` is empty. Refine before or during
-P7-T<n>-3 if specifics are known. The same guards apply to the
-agentic-ops row's empty `extra_allowed_tools` (the allowlist is
-not widened when the input is empty).
+configured)" for empty `review_focus_paths`; the `Assemble
+allowlist` step (`if [[ -n "${EXTRA//[[:space:]]/}" ]]`) appends
+nothing for empty `extra_allowed_tools`. Refine before or during
+P7-T<n>-3 if vigil's contract surfaces and static-analysis stack
+become known. The same guards apply to the agentic-ops row's
+empty `extra_allowed_tools` (the allowlist is not widened).
 
 ## Per-repo subtasks (7x; n in {1..7})
 

@@ -44,9 +44,10 @@ covered:
   problems before more work piles on.
 - **Strategic.** Build a generic platform reusable across
   `loganrooks/prix-guesser`, `arxiv-sanity-mcp`, `f1-modeling`,
-  `epistemic-agency`, `scholardoc`. The forcing function is not
-  CBM-specific; multi-vendor and multi-repo are first-class
-  requirements.
+  `epistemic-agency`, `scholardoc`, plus `vigil` and `agentic-ops`
+  itself per [ADR-009](../docs/adr/ADR-009-consumer-cap-relaxation.md).
+  The forcing function is not CBM-specific; multi-vendor and
+  multi-repo are first-class requirements.
 - **Quality bar.** Senior software engineers, AI researchers, and
   AI systems developers will review this work. That sets
   requirements for ADRs, threat models, pinned action SHAs,

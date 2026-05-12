@@ -43,7 +43,8 @@ working together, growing with the consuming repos:
 ## Why this exists
 
 The user behind this project ([loganrooks](https://github.com/loganrooks))
-maintains six personal repos where most code is AI-authored. AI ships
+maintains eight personal repos where most code is AI-authored (the
+named internal-consumer set per ADR-006 / ADR-009). AI ships
 plausible-but-wrong code at a velocity human review can't keep up with;
 existing tools (CodeRabbit, Codex, Diamond) catch patterns but don't compose
 across vendors, don't span lifecycle stages, and don't evolve with the

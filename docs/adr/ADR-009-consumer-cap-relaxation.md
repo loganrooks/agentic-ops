@@ -86,6 +86,27 @@ file; the kernel is consumed, not invoked directly. Review fires
 only on explicit `@claude` triggers on agentic-ops PRs and issues.
 No autonomous self-triggering; no infinite-loop surface.
 
+> **Known workflow-correctness dependency.** The intent of the
+> `@v1` pin is that the kernel checked out as `central/` during a
+> review run is the *last-released* version, not the in-flight
+> branch. Realizing that intent depends on the kernel's
+> `Determine central ref` step
+> (`.github/workflows/review.yml`) deriving the checkout ref from
+> the caller's `uses:` pin (i.e., `refs/tags/v1`) rather than the
+> caller run's own ref (e.g., `refs/heads/main`). Today that step
+> reads `github.workflow_ref`; the GitHub Actions context docs
+> distinguish `github.workflow_ref` (the run's workflow ref) from
+> `job.workflow_ref` (the reused workflow's ref). If
+> `github.workflow_ref` resolves to the caller run's ref in the
+> reusable-workflow case, the self-consumer pattern would
+> review against in-flight changes instead of `@v1`. This is a
+> kernel-workflow correctness question, not a scope question;
+> it is tracked as a follow-up to ADR-009 — to be verified
+> empirically during P7-T-agentic-ops execution and, if needed,
+> fixed via a kernel-workflow patch that pins to
+> `job.workflow_ref`. The named-set policy in §1 stands
+> regardless of how the central-ref derivation lands.
+
 **3. ADR-006 §§1, 3, 4, 5 retained.** This ADR relaxes only the
 numeric cap in §2. The auth model (single-principal plan auth),
 the no-installer-for-external-use commitment, the
