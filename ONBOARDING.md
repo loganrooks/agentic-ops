@@ -38,9 +38,10 @@ The canonical source is the `Consumer caller stub` block in the
 header comment of
 [`.github/workflows/review.yml`](.github/workflows/review.yml).
 If that header changes, it is authoritative; the snippet below is
-a reading aid. The working reference instance is CBM's caller stub
-([`loganrooks/codebase-mapper`](https://github.com/loganrooks/codebase-mapper)
-at SHA `f6fe379` as of 2026-05-11).
+a reading aid. The working reference instance is CBM's caller stub at
+[`loganrooks/codebase-mapper/.github/workflows/claude-review.yml@f6fe379`](https://github.com/loganrooks/codebase-mapper/blob/f6fe379/.github/workflows/claude-review.yml)
+(permalink to the exact workflow file at commit `f6fe379`, as of
+2026-05-11).
 
 ```yaml
 on:
@@ -230,8 +231,9 @@ P7's per-repo configuration table).
 
 A successful smoke test means: workflow fires, Claude posts a
 short comment via `post-claude-review.sh`, no `allowedTools`
-denials in the run log, total wall-clock under the
-`timeout_minutes` default (45).
+denials in the run log, total wall-clock under the configured
+`timeout_minutes` value in
+[`.github/workflows/review.yml`](.github/workflows/review.yml).
 
 ## What this is not
 
