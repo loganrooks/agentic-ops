@@ -86,26 +86,33 @@ file; the kernel is consumed, not invoked directly. Review fires
 only on explicit `@claude` triggers on agentic-ops PRs and issues.
 No autonomous self-triggering; no infinite-loop surface.
 
-> **Known workflow-correctness dependency.** The intent of the
-> `@v1` pin is that the kernel checked out as `central/` during a
-> review run is the *last-released* version, not the in-flight
-> branch. Realizing that intent depends on the kernel's
-> `Determine central ref` step
+> **Workflow-correctness prerequisite for the self-consumer
+> pattern.** The intent of the `@v1` pin is that the kernel
+> checked out as `central/` during a review run is the
+> *last-released* version, not the in-flight branch. Realizing
+> that intent depends on the kernel's `Determine central ref` step
 > (`.github/workflows/review.yml`) deriving the checkout ref from
-> the caller's `uses:` pin (i.e., `refs/tags/v1`) rather than the
+> the caller's `uses:` pin (`refs/tags/v1`) rather than the
 > caller run's own ref (e.g., `refs/heads/main`). Today that step
-> reads `github.workflow_ref`; the GitHub Actions context docs
-> distinguish `github.workflow_ref` (the run's workflow ref) from
-> `job.workflow_ref` (the reused workflow's ref). If
-> `github.workflow_ref` resolves to the caller run's ref in the
-> reusable-workflow case, the self-consumer pattern would
-> review against in-flight changes instead of `@v1`. This is a
-> kernel-workflow correctness question, not a scope question;
-> it is tracked as a follow-up to ADR-009 — to be verified
-> empirically during P7-T-agentic-ops execution and, if needed,
-> fixed via a kernel-workflow patch that pins to
-> `job.workflow_ref`. The named-set policy in §1 stands
-> regardless of how the central-ref derivation lands.
+> reads `github.workflow_ref`; per the GitHub Actions contexts
+> documentation, inside a reusable workflow the `github` context
+> is associated with the *caller's* running workflow, while
+> `job.workflow_ref` is the property that refers to the
+> reusable-workflow file. If the current step resolves to the
+> caller run's ref, the self-consumer pattern would review
+> against in-flight changes instead of `@v1`, violating the
+> release-contract invariant this ADR asserts. **This is a
+> prerequisite for P7-T-agentic-ops onboarding, not a deferred
+> follow-up.** P7-T-agentic-ops MUST NOT begin until either
+> (a) empirical verification confirms `github.workflow_ref`
+> currently resolves to the reusable-workflow's pinned ref in
+> our setup (in which case the existing code is correct and the
+> doc-comment in review.yml reflects observed behavior), or
+> (b) a kernel-workflow patch pins the derivation to
+> `job.workflow_ref`. The named-set policy in §1 of this ADR
+> stands regardless of how the central-ref derivation lands; the
+> dependency applies only to the *self-consumer pattern* in §2
+> of this section.
 
 **3. ADR-006 §§1, 3, 4, 5 retained.** This ADR relaxes only the
 numeric cap in §2. The auth model (single-principal plan auth),
@@ -151,19 +158,57 @@ This ADR is intentionally narrow. It does NOT:
   prerequisites met, (c) a new auth-model ADR. All three remain
   required.
 
+### Dependent ADRs — interpretive references to "six"
+
+ADR-003 (versioning) and ADR-007 (threat-model gating) contain
+several "six consumers" / "six repos" phrasings that were
+accurate at the time those ADRs were written. After this ADR
+they become *interpretive* references rather than policy
+assertions, by the same logic applied to ADR-006 §3 in §Decision
+§3 above:
+
+- **ADR-003** — `@v1` versioning + additivity (uses "six" in
+  blast-radius reasoning, e.g., "no path to accidentally break
+  six consumers at once"). The blast-radius analysis scales
+  linearly to eight; the floating-tag-with-additivity decision
+  is unchanged. Anyone reviewing future versioning work should
+  read those "six" phrasings as "the named-internal-consumer set
+  as defined by ADR-006 §2 / ADR-009 §Decision §1", currently
+  eight.
+- **ADR-007** — threat-model gating (uses "six internal
+  consumers" once in describing the trusted-actor surface). The
+  threat-model assumption is *trusted internal actors under
+  single-principal plan auth*, which holds at eight as it did at
+  six. ADR-007's prerequisites for moving to wide deployment
+  remain unchanged by this ADR.
+
+No status-line updates are added to ADR-003 or ADR-007 because
+they neither contradict nor depend numerically on the cap value;
+they only cite the count as context. A future ADR that adjusts
+ADR-003 or ADR-007 substantively should refresh both the count
+and the relationship to ADR-006/ADR-009 at that time.
+
 ## Trigger conditions for revisiting
 
 This ADR is superseded (by a later ADR) under either of:
 
-- A ninth consumer is proposed. Same shape as ADR-006 §2's
-  requirement: the new ADR names the consumer, makes the
-  maintenance-load case, and either fits the named-set discipline
-  (raise to nine, name the consumer, preserve discipline) or
-  abandons it (replace named set with a different boundary
-  condition, requiring justification).
+- A ninth named *internal* consumer is proposed (a repo in
+  `loganrooks/*` under single-principal plan auth per ADR-006
+  §1). Same shape as ADR-006 §2's requirement: the new ADR names
+  the consumer, makes the maintenance-load case, and either fits
+  the named-set discipline (raise to nine, name the consumer,
+  preserve discipline) or abandons it (replace named set with a
+  different boundary condition, requiring justification). This
+  bullet applies only to internal consumers; any external
+  consumer falls under the next bullet.
 - ADR-006's three-prong gate clears — at which point a full
   supersession of ADR-006 replaces both ADR-006 and this ADR
-  with the open-source-product framing.
+  with the open-source-product framing. Any external-consumer
+  proposal (including any expansion outside `loganrooks/*` or
+  outside the single-principal plan-auth model) requires this
+  path, not the ninth-internal-consumer path — see ADR-006
+  §"Trigger conditions for revisiting" for the three required
+  preconditions.
 
 Until one of these fires, the cap stands at eight.
 
