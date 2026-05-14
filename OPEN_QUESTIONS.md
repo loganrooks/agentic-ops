@@ -478,6 +478,145 @@ conditions met) and §4 (repo visibility / no marketplace listing),
 
 ---
 
+## OQ-13 — `extra_allowed_tools` policy gap (plugin-loading tools)
+
+**Surfaced.** 2026-05-14, by Codex automatic re-review on closed
+PR #17 (`docs(adr): ADR-010 — eslint Forbidden + wildcard limits`).
+PR #17 attempted to fix `Bash(eslint:*)` after Codex's P1 finding on
+`loganrooks/prix-guesser` PR #1; Codex's re-review surfaced that the
+fix was incomplete — the same code-execution-from-PR-head pattern
+applies to multiple linters in [ADR-004](docs/adr/ADR-004-allowlist-policy.md)
+§Decision §Acceptable, plus the `Bash(tsc --noEmit *)` wildcard
+chains into a wrapper-overwrite attack.
+
+**The gap.** ADR-004's "STATIC ANALYSIS ONLY" framing conflates two
+different properties: (a) the tool parses target code without
+compiling/executing it, and (b) the tool itself does not execute
+code from PR-controlled config files. (a) is true for all linters.
+(b) is false for any linter with a plugin system. ADR-004 §Decision
+§Acceptable was built on (a) alone; tools currently listed
+acceptable that violate (b):
+
+| Tool | Plugin/code-loading surface | Verified |
+|---|---|---|
+| `eslint` | `eslint.config.js` / `.eslintrc.js` (JavaScript) | Codex P1 on prix-guesser PR #1 |
+| `mypy` | `mypy.ini` / `pyproject.toml` `plugins` (Python) | Codex P1 on agentic-ops PR #17 (mypy 1.20.2) |
+| `pylint` | `.pylintrc` `load-plugins` (Python) | Codex P2 on agentic-ops PR #17 (docs) |
+| `flake8` | `setup.cfg` `[flake8:local-plugins]` (Python) | Codex P2 on agentic-ops PR #17 (docs) |
+
+`Bash(tsc --noEmit *)` is a separate wildcard-defeat issue:
+`tsc --noEmit false --outFile <wrapper-script-path>` overwrites the
+privileged wrapper script (`central/.github/scripts/post-claude-review.sh`)
+with attacker-controlled JavaScript; executable bit preserved by
+Node's `fs.writeFile`; next wrapper invocation runs attacker code as
+bash via JS-shell polyglot. Codex P1 verified locally with tsc 6.0.3.
+
+**Genuinely safe set** (verified no plugin/code-loading surface):
+`ruff` (Rust binary, no plugins), `shellcheck`, `actionlint`,
+`yamllint`, `pyright` (bundled binary, no Python plugin loading),
+`rg`, `jq`, `yq`, `ast-grep`.
+
+**Interim fix (PR #18).** P7 phase-doc table reduced: `prix-guesser`
+and `epistemic-agency` rows go to empty `extra_allowed_tools`
+(TS-stack consumers lose tsc findings until OQ-13 resolves);
+`arxiv-sanity-mcp` and `scholardoc` rows drop `Bash(mypy:*)`,
+keeping only `Bash(ruff:*)`. ONBOARDING.md §"Per-repo customization
+checklist" mirrors this with the broader-class explanation. ADR-004
+itself is **not** amended in PR #18 — the architectural decision
+below determines the right shape of the codifying ADR.
+
+**Production state at the time of capture.** `loganrooks/prix-guesser`
+PR #1 (merged at `42dc911`) ships with the vulnerable
+`Bash(tsc --noEmit *)` wildcard. `loganrooks/arxiv-sanity-mcp` PR #2
+(open, /goal paused) ships with the vulnerable `Bash(ruff:*),Bash(mypy:*)`
+caller stub. Both require consumer-side follow-up patches after PR
+#18 lands. The practical exploit risk today is nil because the
+named-consumer set (per ADR-009 §Decision §1) is private and only
+the maintainer authors PRs against these repos, but the substrate's
+discipline assumes hostile PR-head input per ADR-007.
+
+**Architectural decision space (the real OQ).**
+
+**Option 1 — Accept reduced allowlist permanently.** Drop all
+plugin-loading tools from §Acceptable; reclassify as Forbidden under
+the existing threat model. Genuinely-safe tools only.
+
+| Pros | Cons |
+|---|---|
+| No infrastructure work | Significant capability loss for review |
+| Honest about the threat model | Doesn't fix the structural problem (next tool we add might also have plugin loading; whitelist needs continual filtering) |
+| Defensible to senior security engineer | Python consumers get only ruff (style/import-order), no type checking; TS consumers get nothing in `extra_allowed_tools` |
+
+**Option 2 — Wrapper-script discipline.** Add `central/scripts/safe-<tool>.sh`
+for each affected tool; hardcode safe flags (e.g., mypy `--config-file
+/dev/null --no-incremental`; tsc refusing `--outFile`/`--outDir`/`--build`/
+`--noEmit false`); allowlist `Bash(./central/scripts/safe-<tool>.sh:*)`.
+
+| Pros | Cons |
+|---|---|
+| Preserves review capability | 1-2 weeks per tool to verify "safe flags" actually disable plugin loading and other escape hatches |
+| Single audited boundary per tool (wrapper is the argument-injection boundary; allowlist wildcard is safe inside it) | mypy has no `--disable-plugins` flag; requires `--config-file /dev/null` + env hygiene; needs verification |
+| Wrapper is reusable across consumers via central checkout | tsc safe-form must refuse multiple defeat patterns (`--outFile`, `--outDir`, `--build`, `--noEmit false`, `--noEmit=false`, etc.) — multiple ways to slip through |
+| Aligns with ADR-004's existing wrapper-script discipline for `post-claude-review.sh` | Wrapper itself is a new attack surface (bugs in the wrapper = full compromise); maintenance burden ongoing as upstream tools change |
+
+**Option 3 — Sandboxed execution (ADR-004 §"Path B").** Second
+workflow (`workflow_run`-triggered) with `permissions: read-only`
+and no `CLAUDE_CODE_OAUTH_TOKEN`. Runs PR-head tools. Surfaces
+results as artifacts to the reviewer.
+
+| Pros | Cons |
+|---|---|
+| Structurally correct | Substantial implementation work (new workflow + artifact protocol) |
+| Any tool becomes safe under no-secrets boundary | Per ADR-004, "empirical value of test-results-as-reviewer-input is unproven" |
+| Removes whitelist-maintenance burden | Risk of creating a new exfiltration path if done wrong |
+| Future-compatible with adding test runners (`pytest`, `jest`) | Doubles workflow surface area |
+
+**Option 4 — Threat-model reframe for internal consumers.** New ADR
+establishing that named-consumers per ADR-009 use a relaxed threat
+model: PR authors are trusted (maintainer + collaborators + agents
+under maintainer control). ADR-004's untrusted-input model applies
+only to a future external-onboarding context.
+
+| Pros | Cons |
+|---|---|
+| Honest about deployment reality (current PR-author pool is nil hostile) | Sets dangerous precedent ("relax when inconvenient") |
+| No infrastructure work | Erodes substrate's security posture for future external onboarding |
+| Restores all current capability | Automated PR authors (Codex, Claude in autonomous mode) may inadvertently include unsafe patterns; "trusted internal" claim weakens when agents are in the loop |
+| Aligns with bounded-scope intent of ADR-006 | ADR-007's threat-model gating becomes inconsistent with the new ADR |
+
+**Recommendation captured at time of surface (not committing).**
+Option 2 (wrapper-script discipline) is the right structural fix
+because (a) it preserves review capability, (b) the wrapper is a
+stable audited boundary, (c) it composes with the existing
+wrapper-script discipline (`post-claude-review.sh`). But the work
+is meaningful (1-2 weeks careful per-tool research + design + test).
+Option 3 is structurally cleanest but ADR-004 itself rates
+value-to-cost as unproven at current scale. Option 4 is dangerous.
+Option 1 is the fallback if Options 2/3 prove infeasible.
+
+**Trigger conditions for resolution.**
+- A consumer has a concrete review need that the reduced allowlist
+  cannot serve (e.g., "we shipped a regression that mypy with
+  plugins would have caught"); forces the conversation about
+  Option 2 vs 3.
+- External onboarding is reopened (per ADR-006 §"Trigger conditions
+  for revisiting"); forces the wider threat-model decision and
+  obviates Option 4.
+- A peer substrate (CodeRabbit, Anthropic's review action) ships
+  Path B and demonstrates feasibility; weighted toward Option 3.
+
+**See also.** [ADR-004](docs/adr/ADR-004-allowlist-policy.md)
+§Decision §Acceptable (the table this OQ identifies as needing
+filtering), §"Why no test execution" (the threat model that already
+covers this class but wasn't applied consistently), §"Path B
+(sandboxed execution) — explicitly deferred" (Option 3 in this OQ).
+[`.planning/phases/P7-onboarding.md`](.planning/phases/P7-onboarding.md)
+§"Per-repo configuration" (the table reduced in PR #18; Updated
+header carries the rationale). [`ONBOARDING.md`](ONBOARDING.md)
+§"Per-repo customization checklist" (the propagation surface).
+
+---
+
 ## How this list evolves
 
 - New questions go here as they emerge.

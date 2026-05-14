@@ -1,6 +1,8 @@
 # Phase P7 — Onboarding 7 internal consumers
 
 > Updated 2026-05-12: aligns with [ADR-009](../../docs/adr/ADR-009-consumer-cap-relaxation.md) (consumer set extended to 8 — vigil + agentic-ops self-consumer added) and [`ONBOARDING.md`](../../ONBOARDING.md) (executable onboarding recipe; replaces the deferred Appendix A.12 reference).
+>
+> Updated 2026-05-14: `extra_allowed_tools` for `prix-guesser`, `arxiv-sanity-mcp`, `epistemic-agency`, and `scholardoc` rows reduced to drop tools with plugin/code-loading surfaces from PR-head config files. Specifically: `Bash(eslint:*)` (loads `eslint.config.js` / `.eslintrc.js` as JS), `Bash(mypy:*)` (loads `plugins` from `mypy.ini` as importable Python), and `Bash(tsc:*)` / `Bash(tsc --noEmit *)` wildcards (the `*` is argument-injection-defeatable via `tsc --noEmit false --outFile <wrapper-script-path>`, chaining into a JS-shell-polyglot wrapper-overwrite attack on `central/.github/scripts/post-claude-review.sh`). The class identified by Codex review on agentic-ops PRs #17 (closed) covers any tool that auto-discovers a config file from CWD and that config can reference executable code; ADR-004 §Acceptable lists `eslint`, `mypy`, `pylint`, `flake8` — all in this class — but doesn't yet codify the rule. The Python rows keep `Bash(ruff:*)` (Rust binary, no plugin loading); the TS rows go to empty `extra_allowed_tools` until the architectural decision in **OQ-13** lands (wrapper scripts vs sandboxed Path B vs threat-model reframe vs accept reduced allowlist). Genuinely safe set verified: `ruff`, `shellcheck`, `actionlint`, `yamllint`, `pyright`, `rg`, `jq`, `yq`, `ast-grep`.
 
 **Goal:** Add caller stubs to prix-guesser, arxiv-sanity-mcp, f1-modeling, epistemic-agency, scholardoc, vigil, and agentic-ops itself (self-consumer pattern per [ADR-009](../../docs/adr/ADR-009-consumer-cap-relaxation.md) §Decision §2) — each consuming the agentic-ops `v1` reusable workflow with per-repo configuration.
 
@@ -26,11 +28,11 @@
 
 | Repo | enabled_modes | review_focus_paths | extra_allowed_tools |
 |---|---|---|---|
-| prix-guesser | `["review","quick","deep","audit:agential-dx"]` | `src/**/*.ts`, `package.json` | `Bash(eslint:*),Bash(tsc:*)` |
-| arxiv-sanity-mcp | `["review","quick","deep","audit:discipline"]` | `mcp_server.py`, `tools/*.py` | `Bash(ruff:*),Bash(mypy:*)` |
+| prix-guesser | `["review","quick","deep","audit:agential-dx"]` | `src/**/*.ts`, `package.json` | _(empty — see OQ-13 note)_ |
+| arxiv-sanity-mcp | `["review","quick","deep","audit:discipline"]` | `mcp_server.py`, `tools/*.py` | `Bash(ruff:*)` |
 | f1-modeling | `["review","quick","deep","audit:tech-debt"]` | `notebooks/*.ipynb`, `src/**/*.py` | `Bash(ruff:*)` |
-| epistemic-agency | `["review","quick","deep","audit:forward-compat"]` | `src/**/*.ts`, `docs/` | `Bash(eslint:*)` |
-| scholardoc | `["review","quick","deep","survey","audit"]` | `src/**/*.py`, `docs/` | `Bash(ruff:*),Bash(mypy:*)` |
+| epistemic-agency | `["review","quick","deep","audit:forward-compat"]` | `src/**/*.ts`, `docs/` | _(empty — see OQ-13 note)_ |
+| scholardoc | `["review","quick","deep","survey","audit"]` | `src/**/*.py`, `docs/` | `Bash(ruff:*)` |
 | vigil | `["review","quick","deep","audit"]` | _(empty — see note)_ | _(empty — see note)_ |
 | agentic-ops | `["review","quick","deep","opus","survey","audit","gates"]` | `.github/workflows/review.yml`, `.github/scripts/`, `docs/adr/` | _(empty — see note)_ |
 
@@ -72,6 +74,23 @@ nothing for empty `extra_allowed_tools`. Refine before or during
 P7-T<n>-3 if vigil's contract surfaces and static-analysis stack
 become known. The same guards apply to the agentic-ops row's
 empty `extra_allowed_tools` (the allowlist is not widened).
+
+**Note on `_(empty — see OQ-13 note)_` cells (prix-guesser,
+epistemic-agency).** These are the TS-stack consumer rows. Per
+the 2026-05-14 Updated header, both rows previously listed
+`Bash(eslint:*)` and/or `Bash(tsc:*)` / `Bash(tsc --noEmit *)`,
+all of which are unsafe under the current threat model:
+ESLint loads `eslint.config.js` / `.eslintrc.js` from PR head as
+JavaScript; `Bash(tsc:*)` permits emit; `Bash(tsc --noEmit *)`'s
+trailing `*` is argument-injection-defeatable (`tsc --noEmit
+false --outFile <wrapper-script-path>` chains into a wrapper-overwrite
+attack). Until [OQ-13](../../OPEN_QUESTIONS.md) resolves with an
+architectural decision (wrapper-script discipline / sandboxed
+Path B / threat-model reframe / accept reduced allowlist), TS-stack
+consumers run with empty `extra_allowed_tools` — review remains
+semantic (Claude reads source files and reasons about them) but
+loses tsc/eslint findings. This is the conservative default until
+the policy gap closes.
 
 ## Per-repo subtasks (7x; n in {1..7})
 

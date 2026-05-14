@@ -134,20 +134,42 @@ Values for the named consumers are tabled in
    static-analysis stack. **Before copying any `extra_allowed_tools`
    value verbatim, audit it against
    [ADR-004](docs/adr/ADR-004-allowlist-policy.md) §"Forbidden
-   entries".** Specifically known unsafe patterns currently in the
-   P7 table that must be tightened before use:
-   - `Bash(tsc:*)` (prix-guesser only — `epistemic-agency`'s row
-     has `Bash(eslint:*)` and does not need tightening here).
-     ADR-004 allows `tsc` only with `--noEmit`. Per Claude Code
-     permission patterns, the `:*` wildcard only matches at the
-     end of a pattern, so `Bash(tsc:--noEmit:*)` would match a
-     literal `tsc:--noEmit` invocation, not `tsc --noEmit`.
-     Tighten to `Bash(tsc --noEmit *)` (space-form pattern) or
-     omit the entry before pasting into the consumer stub.
-   - Any wildcard `Bash(<tool>:*)` for a compile-capable tool
+   entries" *and* the broader class of plugin-loading tools
+   identified in [OQ-13](OPEN_QUESTIONS.md) — ADR-004 §Acceptable
+   has not yet been amended to capture this class.** Until OQ-13
+   resolves, the conservative defaults below apply:
+   - **`Bash(eslint:*)` or `Bash(eslint *)` — never include.**
+     ESLint loads `eslint.config.js` / `.eslintrc.js` from the PR
+     head as executable JavaScript. Same threat class as test
+     runners (ADR-004 §"Why no test execution"). The P7 table
+     drops eslint from all rows pending OQ-13.
+   - **`Bash(mypy:*)` or `Bash(mypy *)` — never include.** mypy
+     loads `plugins` from `mypy.ini` / `pyproject.toml` as
+     importable Python. Same threat class. P7 Python rows
+     (`arxiv-sanity-mcp`, `scholardoc`) keep `Bash(ruff:*)` only.
+   - **`Bash(flake8:*)`, `Bash(pylint:*)` — never include.** Both
+     load local plugins from project config (`[flake8:local-plugins]`,
+     `load-plugins`). Not currently in any P7 row but listed in
+     ADR-004 §Acceptable; do not re-introduce.
+   - **`Bash(tsc:*)` and `Bash(tsc --noEmit *)` wildcards — never
+     include.** `Bash(tsc:*)` permits emit. `Bash(tsc --noEmit *)`
+     is argument-injection-defeatable: `tsc --noEmit false --outFile
+     central/.github/scripts/post-claude-review.sh a.ts` overwrites
+     the privileged wrapper with attacker-controlled JavaScript
+     (executable bit preserved by Node's `fs.writeFile`); next
+     wrapper invocation runs attacker code as bash via JS-shell
+     polyglot. The P7 table drops tsc from TS-stack rows entirely
+     until OQ-13 resolves with a wrapper-script or
+     sandboxed-execution path.
+   - **Any wildcard `Bash(<tool>:*)` for a compile-capable tool**
      (cargo, npm build, make, cmake) — pin to non-emitting flags
-     only using the space-form pattern
-     `Bash(<tool> <safe-flag> *)`.
+     only via wrapper script (deferred to OQ-13). Until then,
+     omit.
+
+   **Currently-safe set** (verified no plugin/code-loading surface):
+   `ruff` (Rust binary), `shellcheck`, `actionlint`, `yamllint`,
+   `pyright` (bundled binary), `rg`, `jq`, `yq`, `ast-grep`. Other
+   tools require independent verification before allowlisting.
 
 ## Per-repo agent brief
 
