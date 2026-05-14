@@ -75,22 +75,35 @@ P7-T<n>-3 if vigil's contract surfaces and static-analysis stack
 become known. The same guards apply to the agentic-ops row's
 empty `extra_allowed_tools` (the allowlist is not widened).
 
-**Note on `_(empty — see OQ-13 note)_` cells (prix-guesser,
-epistemic-agency).** These are the TS-stack consumer rows. Per
-the 2026-05-14 Updated header, both rows previously listed
-`Bash(eslint:*)` and/or `Bash(tsc:*)` / `Bash(tsc --noEmit *)`,
+**Note on `_(empty — see OQ-13 note)_` cells (all five
+named-consumer rows: prix-guesser, arxiv-sanity-mcp, f1-modeling,
+epistemic-agency, scholardoc).** Per the 2026-05-14 Updated header,
+these rows previously listed `Bash(eslint:*)`, `Bash(tsc:*)` /
+`Bash(tsc --noEmit *)`, `Bash(mypy:*)`, and/or `Bash(ruff:*)`,
 all of which are unsafe under the current threat model:
-ESLint loads `eslint.config.js` / `.eslintrc.js` from PR head as
-JavaScript; `Bash(tsc:*)` permits emit; `Bash(tsc --noEmit *)`'s
-trailing `*` is argument-injection-defeatable (`tsc --noEmit
-false --outFile <wrapper-script-path>` chains into a wrapper-overwrite
-attack). Until [OQ-13](../../OPEN_QUESTIONS.md) resolves with an
+
+- ESLint loads `eslint.config.js` / `.eslintrc.js` from PR head
+  as JavaScript (class-1 plugin/config code-loading).
+- mypy loads `plugins` from `mypy.ini` / `pyproject.toml` as
+  importable Python (class-1).
+- `Bash(tsc:*)` permits emit; `Bash(tsc --noEmit *)`'s trailing
+  `*` is argument-injection-defeatable (`tsc --noEmit false
+  --outFile <wrapper-script-path>` chains into wrapper-overwrite)
+  (class-2 wildcard defeat).
+- `Bash(ruff:*)`'s `--output-file <path>` / `--fix` flags are
+  the same wildcard-overwrite class as tsc's `--outFile` (class-2).
+
+Until [OQ-13](../../OPEN_QUESTIONS.md) resolves with an
 architectural decision (wrapper-script discipline / sandboxed
-Path B / threat-model reframe / accept reduced allowlist), TS-stack
-consumers run with empty `extra_allowed_tools` — review remains
-semantic (Claude reads source files and reasons about them) but
-loses tsc/eslint findings. This is the conservative default until
-the policy gap closes.
+Path B / threat-model reframe / accept reduced allowlist), all
+five named-consumer rows run with empty `extra_allowed_tools`
+— review remains semantic (Claude reads source files and reasons
+about correctness/style/security inline) but loses structured
+linter / type-checker findings. This is the conservative default
+until the policy gap closes; vigil and agentic-ops rows are also
+empty for unrelated reasons (vigil: contract surfaces not yet
+known; agentic-ops: kernel doesn't install lint binaries at
+runtime — see notes above).
 
 ## Per-repo subtasks (7x; n in {1..7})
 

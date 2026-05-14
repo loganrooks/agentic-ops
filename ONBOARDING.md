@@ -152,7 +152,8 @@ Values for the named consumers are tabled in
    - **`Bash(mypy:*)` or `Bash(mypy *)` — never include.** mypy
      loads `plugins` from `mypy.ini` / `pyproject.toml` as
      importable Python. Same threat class. P7 Python rows
-     (`arxiv-sanity-mcp`, `scholardoc`) keep `Bash(ruff:*)` only.
+     (`arxiv-sanity-mcp`, `scholardoc`) drop mypy as part of the
+     all-empty interim posture (see below).
    - **`Bash(flake8:*)`, `Bash(pylint:*)` — never include.** Both
      load local plugins from project config (`[flake8:local-plugins]`,
      `load-plugins`). Not currently in any P7 row but listed in

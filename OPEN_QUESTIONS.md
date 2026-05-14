@@ -570,7 +570,7 @@ pragmatic interim"; Codex P1 on commit `b6b2e70` caught the
 consistency argument (ruff's `--output-file` / `--fix` flags are
 the same wildcard-overwrite class as tsc's `--outFile`, so the
 same logic that empties TS rows empties Python rows too) and the
-ruff entries were dropped in commit `f3...` (see PR #18 commit
+ruff entries were dropped in commit `e05f695` (see PR #18 commit
 log). ONBOARDING.md §"Per-repo customization checklist" mirrors
 this with the broader-class explanation; the "verified-safe set"
 framing is withdrawn (see above). ADR-004 itself is **not**
@@ -597,12 +597,19 @@ PR #1 (merged at `42dc911`) ships with the vulnerable
 `Bash(tsc --noEmit *)` wildcard. `loganrooks/arxiv-sanity-mcp` PR #2
 (open, /goal paused) ships with the vulnerable `Bash(ruff:*),Bash(mypy:*)`
 caller stub. Both require consumer-side follow-up patches after PR
-18 lands (mypy dropped from arxiv-sanity-mcp; tsc wildcard dropped
-from prix-guesser; ruff retained as the least-bad interim default).
-The practical exploit risk today is nil because the named-consumer
-set (per ADR-009 §Decision §1) is private and only the maintainer
-authors PRs against these repos, but the substrate's discipline
-assumes hostile PR-head input per ADR-007.
+18 lands — per the all-empty interim posture, the arxiv-sanity-mcp
+caller stub drops both `Bash(ruff:*)` and `Bash(mypy:*)` (going to
+empty `extra_allowed_tools`), and the prix-guesser caller stub
+drops `Bash(tsc --noEmit *)` (also going to empty). The practical
+exploit risk is lower under current constraints — the named-consumer
+set (per ADR-009 §Decision §1) is private, PRs are authored by the
+maintainer or maintainer-controlled agents, and no third-party
+collaborators currently hold push access (verifiable via
+`gh api repos/loganrooks/<consumer>/collaborators` and the
+private-repo visibility setting per repo). But the substrate's
+discipline assumes hostile PR-head input per ADR-007; the
+empty-allowlist interim is keyed to that assumption, not to the
+current PR-author population.
 
 **Architectural decision space (the real OQ).**
 
@@ -614,7 +621,7 @@ the existing threat model. Genuinely-safe tools only.
 |---|---|
 | No infrastructure work | Significant capability loss for review |
 | Honest about the threat model | Doesn't fix the structural problem (next tool we add might also have plugin loading; whitelist needs continual filtering) |
-| Defensible to senior security engineer | Python consumers get only ruff (style/import-order), no type checking; TS consumers get nothing in `extra_allowed_tools` |
+| Defensible to senior security engineer | All five named-consumer rows lose structured linter findings (Python rows lose ruff + mypy; TS rows lose tsc + eslint); semantic review by Claude remains but anchored on inline reasoning rather than tool diagnostics |
 
 **Option 2 — Wrapper-script discipline.** Add `central/scripts/safe-<tool>.sh`
 for each affected tool; hardcode safe flags (e.g., mypy `--config-file
