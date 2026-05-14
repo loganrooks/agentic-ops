@@ -1,6 +1,8 @@
 # Phase P7 — Onboarding 7 internal consumers
 
 > Updated 2026-05-12: aligns with [ADR-009](../../docs/adr/ADR-009-consumer-cap-relaxation.md) (consumer set extended to 8 — vigil + agentic-ops self-consumer added) and [`ONBOARDING.md`](../../ONBOARDING.md) (executable onboarding recipe; replaces the deferred Appendix A.12 reference).
+>
+> Updated 2026-05-14: TS-stack rows (prix-guesser, epistemic-agency) carry `Bash(tsc --noEmit *)` only, no `Bash(eslint:*)`. ESLint loads project-level JavaScript config (`eslint.config.js`, `.eslintrc.js`) from the PR head, making it a code-execution surface — incompatible with [ADR-004](../../docs/adr/ADR-004-allowlist-policy.md)'s static-analysis-only contract. Caught by Codex P1 review on prix-guesser PR #1 (consumer repo); carried forward to the still-vulnerable epistemic-agency row before /goal reaches it. prix-guesser's `Bash(tsc:*)` also tightened to `Bash(tsc --noEmit *)` (Claude Code permission space-form per ADR-004; the colon-form would let `tsc --build`/`tsc --emit` slip through).
 
 **Goal:** Add caller stubs to prix-guesser, arxiv-sanity-mcp, f1-modeling, epistemic-agency, scholardoc, vigil, and agentic-ops itself (self-consumer pattern per [ADR-009](../../docs/adr/ADR-009-consumer-cap-relaxation.md) §Decision §2) — each consuming the agentic-ops `v1` reusable workflow with per-repo configuration.
 
@@ -26,10 +28,10 @@
 
 | Repo | enabled_modes | review_focus_paths | extra_allowed_tools |
 |---|---|---|---|
-| prix-guesser | `["review","quick","deep","audit:agential-dx"]` | `src/**/*.ts`, `package.json` | `Bash(eslint:*),Bash(tsc:*)` |
+| prix-guesser | `["review","quick","deep","audit:agential-dx"]` | `src/**/*.ts`, `package.json` | `Bash(tsc --noEmit *)` |
 | arxiv-sanity-mcp | `["review","quick","deep","audit:discipline"]` | `mcp_server.py`, `tools/*.py` | `Bash(ruff:*),Bash(mypy:*)` |
 | f1-modeling | `["review","quick","deep","audit:tech-debt"]` | `notebooks/*.ipynb`, `src/**/*.py` | `Bash(ruff:*)` |
-| epistemic-agency | `["review","quick","deep","audit:forward-compat"]` | `src/**/*.ts`, `docs/` | `Bash(eslint:*)` |
+| epistemic-agency | `["review","quick","deep","audit:forward-compat"]` | `src/**/*.ts`, `docs/` | `Bash(tsc --noEmit *)` |
 | scholardoc | `["review","quick","deep","survey","audit"]` | `src/**/*.py`, `docs/` | `Bash(ruff:*),Bash(mypy:*)` |
 | vigil | `["review","quick","deep","audit"]` | _(empty — see note)_ | _(empty — see note)_ |
 | agentic-ops | `["review","quick","deep","opus","survey","audit","gates"]` | `.github/workflows/review.yml`, `.github/scripts/`, `docs/adr/` | _(empty — see note)_ |
