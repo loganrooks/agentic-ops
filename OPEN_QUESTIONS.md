@@ -340,11 +340,20 @@ designed.
      first-install falls here.
   2. **API-callable without third-party credential.** Add a repo
      to an *existing* GitHub App installation
-     (`PUT /user/installations/{installation_id}/repositories/{repository_id}`);
-     enable branch protection
-     (`PUT /repos/.../branches/.../protection`). The actor
-     presents only their own auth (with admin scope) plus a
-     setting payload. No third-party credential changes hands.
+     (`PUT /user/installations/{installation_id}/repositories/{repository_id}`
+     — caveat: per GitHub's REST docs this endpoint *only* accepts
+     a **classic PAT with `repo` scope**; it rejects GitHub App
+     user/installation tokens, fine-grained PATs, and the default
+     `GITHUB_TOKEN`. A future installer or CI path has to provision
+     a classic PAT specifically, not whatever ambient credential
+     happens to be available); enable branch protection
+     (`PUT /repos/.../branches/.../protection` — accepts classic
+     PATs, fine-grained PATs with the right scope, and properly-
+     scoped `GITHUB_TOKEN`). Both are API-callable; both expose
+     only the actor's own auth plus a setting payload; no
+     third-party credential changes hands. The two operations
+     differ in *which* actor-credential types the endpoint accepts,
+     and that asymmetry is load-bearing for installer design.
   3. **API-callable but credential-bearing.** `gh secret set`
      requires the actor to *hold the plaintext secret value at
      the moment of the call*. The operation is API-callable, but
@@ -385,8 +394,8 @@ designed.
   — agent prints the planned action, applies it if pre-authorized,
   escalates only if pre-authorization is missing — is not yet
   expressed anywhere in the docs.
-- **`EXECUTION-MODEL.md` policy on high-stakes escalation.**
-  Inside `EXECUTION-MODEL.md §"Agent-to-agent mailbox channel
+- **`.planning/EXECUTION-MODEL.md` policy on high-stakes escalation.**
+  Inside `.planning/EXECUTION-MODEL.md §"Agent-to-agent mailbox channel
   (post-install)"`, the paragraph beginning *"High-stakes
   decisions still route to the maintainer through the normal
   escalation path"* enumerates the escalation territory and
@@ -439,14 +448,14 @@ designed.
 **Constraint:** any resolution must respect ADR-006's bounded-
 deployment scope and ADR-007's threat-model gating. Anything
 that relaxes those requires a superseding ADR.
-`EXECUTION-MODEL.md`'s high-stakes-escalation enumeration (in
+`.planning/EXECUTION-MODEL.md`'s high-stakes-escalation enumeration (in
 §"Agent-to-agent mailbox channel (post-install)", paragraph
 beginning *"High-stakes decisions still route..."*) is also an
 active constraint until amended by an ADR or a
 directly-justified edit.
 
 **Out of scope for this OQ.** Widening `/goal`'s scope on the
-current dev run is a separate decision about `EXECUTION-MODEL.md`,
+current dev run is a separate decision about `.planning/EXECUTION-MODEL.md`,
 not about this OQ. This OQ is about the eventual product
 install/onboarding, distinct from how the substrate is currently
 being *built* via autonomous execution.
