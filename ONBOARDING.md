@@ -82,13 +82,19 @@ Per-repo customizable inputs (defaults in `.github/workflows/review.yml`):
   [ADR-001](docs/adr/ADR-001-mode-taxonomy.md).
 - `review_focus_paths` — globs prioritized in `review` mode.
 - `gates_paths` — required if `gates` is in `enabled_modes`.
-- `extra_allowed_tools` — static-analysis-only additions (e.g.
-  `Bash(ruff:*),Bash(mypy:*)`). Per
+- `extra_allowed_tools` — static-analysis-only additions. Per
   [ADR-004](docs/adr/ADR-004-allowlist-policy.md), no test
   runners, installers, build tools, network fetchers, or
   code-execution surfaces. Compile-capable tools must be pinned
   to non-emitting invocations (e.g. `tsc --noEmit`, not bare
-  `tsc:*`); see ADR-004 §"Forbidden entries".
+  `tsc:*`); see ADR-004 §"Forbidden entries". **Important:**
+  ADR-004 §Acceptable lists tools that have since been shown to
+  carry plugin-loading or wildcard-defeat surfaces — do not copy
+  values verbatim from any source. See checklist item 5 below
+  and [OQ-13](OPEN_QUESTIONS.md) before adding any allowlist
+  entry. As of 2026-05-14, **all five named-consumer P7 rows use
+  empty `extra_allowed_tools`** pending OQ-13's wrapper-script
+  work; new caller stubs default to empty too.
 - `agents_md_path` — default `AGENTS.md`; missing file tolerated.
 - `repo_label` — default `github.event.repository.name`.
 
@@ -134,20 +140,78 @@ Values for the named consumers are tabled in
    static-analysis stack. **Before copying any `extra_allowed_tools`
    value verbatim, audit it against
    [ADR-004](docs/adr/ADR-004-allowlist-policy.md) §"Forbidden
-   entries".** Specifically known unsafe patterns currently in the
-   P7 table that must be tightened before use:
-   - `Bash(tsc:*)` (prix-guesser only — `epistemic-agency`'s row
-     has `Bash(eslint:*)` and does not need tightening here).
-     ADR-004 allows `tsc` only with `--noEmit`. Per Claude Code
-     permission patterns, the `:*` wildcard only matches at the
-     end of a pattern, so `Bash(tsc:--noEmit:*)` would match a
-     literal `tsc:--noEmit` invocation, not `tsc --noEmit`.
-     Tighten to `Bash(tsc --noEmit *)` (space-form pattern) or
-     omit the entry before pasting into the consumer stub.
-   - Any wildcard `Bash(<tool>:*)` for a compile-capable tool
+   entries" *and* the broader class of plugin-loading tools
+   identified in [OQ-13](OPEN_QUESTIONS.md) — ADR-004 §Acceptable
+   has not yet been amended to capture this class.** Until OQ-13
+   resolves, the conservative defaults below apply:
+   - **`Bash(eslint:*)` or `Bash(eslint *)` — never include.**
+     ESLint loads `eslint.config.js` / `.eslintrc.js` from the PR
+     head as executable JavaScript. Same threat class as test
+     runners (ADR-004 §"Why no test execution"). The P7 table
+     drops eslint from all rows pending OQ-13.
+   - **`Bash(mypy:*)` or `Bash(mypy *)` — never include.** mypy
+     loads `plugins` from `mypy.ini` / `pyproject.toml` as
+     importable Python. Same threat class. P7 Python rows
+     (`arxiv-sanity-mcp`, `scholardoc`) drop mypy as part of the
+     all-empty interim posture (see below).
+   - **`Bash(flake8:*)`, `Bash(pylint:*)` — never include.** Both
+     load local plugins from project config (`[flake8:local-plugins]`,
+     `load-plugins`). Not currently in any P7 row but listed in
+     ADR-004 §Acceptable; do not re-introduce.
+   - **`Bash(tsc:*)` and `Bash(tsc --noEmit *)` wildcards — never
+     include.** `Bash(tsc:*)` permits emit. `Bash(tsc --noEmit *)`
+     is argument-injection-defeatable: `tsc --noEmit false --outFile
+     central/.github/scripts/post-claude-review.sh a.ts` overwrites
+     the privileged wrapper with attacker-controlled JavaScript
+     (executable bit preserved by Node's `fs.writeFile`); next
+     wrapper invocation runs attacker code as bash via JS-shell
+     polyglot. The P7 table drops tsc from TS-stack rows entirely
+     until OQ-13 resolves with a wrapper-script or
+     sandboxed-execution path.
+   - **Any wildcard `Bash(<tool>:*)` for a compile-capable tool**
      (cargo, npm build, make, cmake) — pin to non-emitting flags
-     only using the space-form pattern
-     `Bash(<tool> <safe-flag> *)`.
+     only via wrapper script (deferred to OQ-13). Until then,
+     omit.
+
+   **There is no general "wildcard-safe set."** Codex review on
+   PR #18 (4× P1 findings) demonstrated that almost any CLI tool
+   has at least one wildcard-defeat surface — output-file flags
+   (`ruff --output-file`), in-place edit modes (`yq -i`,
+   `ast-grep --rewrite`), pre-processor command flags
+   (`rg --pre`), interpreter-path config that exec()'s the binary
+   if attacker stages an executable in PR head
+   (`pyright --pythonpath`), or transitive tool invocation
+   (`actionlint -shellcheck=PATH`). Any of these can
+   be chained into the wrapper-overwrite attack class
+   (`tsc --noEmit false --outFile <wrapper-path>`) when wrapper
+   scripts live in the same workspace as the tool's writable
+   targets. Two consequences:
+
+   - **No tool should be claimed "verified safe" under a
+     `Bash(<tool>:*)` wildcard pattern.** This includes tools
+     listed in ADR-004 §Acceptable that have not been audited
+     against the wildcard-defeat class.
+   - **Wrapper scripts (per OQ-13) are the structural fix.**
+     Until they land, the conservative interim is empty
+     `extra_allowed_tools` for all five named-consumer P7 rows.
+     Codex P1 on commit `b6b2e70` confirmed the consistency
+     argument: ruff's `--output-file` / `--fix` flags are the
+     same wildcard-overwrite class as tsc's `--outFile` (both
+     can target `central/.github/scripts/post-claude-review.sh`),
+     so the same logic that empties TS rows empties Python rows
+     too. Per-row capability loss is real but bounded — Claude
+     can still semantically review the code without structured
+     linter findings.
+
+   Tools without plugin-loading surfaces (e.g., `ruff`,
+   `shellcheck`, `actionlint`, `yamllint`, `rg`, `jq`, `pyright`)
+   are at the safer end of the spectrum than tools with plugin
+   loading (`eslint`, `mypy`, `flake8`, `pylint`). Both ends
+   require wrapper scripts or exact-form pinning to be fully
+   safe; the difference is that plugin-loading tools have
+   *immediate* arbitrary code execution on default invocation
+   while non-plugin tools have *conditional* defeats requiring
+   specific args.
 
 ## Per-repo agent brief
 

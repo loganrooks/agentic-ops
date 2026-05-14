@@ -1,6 +1,8 @@
 # Phase P7 — Onboarding 7 internal consumers
 
 > Updated 2026-05-12: aligns with [ADR-009](../../docs/adr/ADR-009-consumer-cap-relaxation.md) (consumer set extended to 8 — vigil + agentic-ops self-consumer added) and [`ONBOARDING.md`](../../ONBOARDING.md) (executable onboarding recipe; replaces the deferred Appendix A.12 reference).
+>
+> Updated 2026-05-14: `extra_allowed_tools` for `prix-guesser`, `arxiv-sanity-mcp`, `epistemic-agency`, and `scholardoc` rows reduced to drop tools with plugin/code-loading surfaces from PR-head config files. Specifically: `Bash(eslint:*)` (loads `eslint.config.js` / `.eslintrc.js` as JS), `Bash(mypy:*)` (loads `plugins` from `mypy.ini` as importable Python), and `Bash(tsc:*)` / `Bash(tsc --noEmit *)` wildcards (the `*` is argument-injection-defeatable via `tsc --noEmit false --outFile <wrapper-script-path>`, chaining into a JS-shell-polyglot wrapper-overwrite attack on `central/.github/scripts/post-claude-review.sh`). The class identified by Codex review on agentic-ops PRs #17 (closed) and #18 covers (a) tools that auto-discover a config file from CWD where that config can reference executable code, and (b) tools whose wildcard permission patterns admit args that enable arbitrary file write or code execution; ADR-004 §Acceptable lists `eslint`, `mypy`, `pylint`, `flake8` (class-a) and effectively any wildcard pattern (class-b — including `pyright` which has no plugin system per Microsoft pyright #607 but whose `--pythonpath <PATH>` invokes the binary at PATH for environment discovery, exec()'ing it if attacker stages an executable in PR head) — but doesn't yet codify the rule. All five named-consumer rows go to empty `extra_allowed_tools` (the Python rows previously kept `Bash(ruff:*)` as a "least-bad pragmatic interim"; that asymmetry was caught by Codex P1 on commit `b6b2e70` — ruff has no plugin loading but its `--output-file` / `--fix` flags are the same wildcard-overwrite class as tsc's `--outFile`, so the same logic that empties TS rows empties Python rows too) until the architectural decision in **OQ-13** lands (wrapper scripts vs sandboxed Path B vs threat-model reframe vs accept reduced allowlist). Tools at the *safer* end of the spectrum (no plugin loading): `ruff`, `shellcheck`, `actionlint`, `yamllint`, `rg`, `jq` — still subject to class-b wildcard defeats; OQ-13's wrapper-script discipline is the structural fix. Adjacent cleanup: `audit:<lens>` entries in `enabled_modes` normalized to bare `audit` (lens is selected at trigger time via `audit_target`; lens-prefixed entries fail dispatch validation per ONBOARDING.md §Per-repo customization checklist item 4).
 
 **Goal:** Add caller stubs to prix-guesser, arxiv-sanity-mcp, f1-modeling, epistemic-agency, scholardoc, vigil, and agentic-ops itself (self-consumer pattern per [ADR-009](../../docs/adr/ADR-009-consumer-cap-relaxation.md) §Decision §2) — each consuming the agentic-ops `v1` reusable workflow with per-repo configuration.
 
@@ -26,11 +28,11 @@
 
 | Repo | enabled_modes | review_focus_paths | extra_allowed_tools |
 |---|---|---|---|
-| prix-guesser | `["review","quick","deep","audit:agential-dx"]` | `src/**/*.ts`, `package.json` | `Bash(eslint:*),Bash(tsc:*)` |
-| arxiv-sanity-mcp | `["review","quick","deep","audit:discipline"]` | `mcp_server.py`, `tools/*.py` | `Bash(ruff:*),Bash(mypy:*)` |
-| f1-modeling | `["review","quick","deep","audit:tech-debt"]` | `notebooks/*.ipynb`, `src/**/*.py` | `Bash(ruff:*)` |
-| epistemic-agency | `["review","quick","deep","audit:forward-compat"]` | `src/**/*.ts`, `docs/` | `Bash(eslint:*)` |
-| scholardoc | `["review","quick","deep","survey","audit"]` | `src/**/*.py`, `docs/` | `Bash(ruff:*),Bash(mypy:*)` |
+| prix-guesser | `["review","quick","deep","audit"]` | `src/**/*.ts`, `package.json` | _(empty — see OQ-13 note)_ |
+| arxiv-sanity-mcp | `["review","quick","deep","audit"]` | `mcp_server.py`, `tools/*.py` | _(empty — see OQ-13 note)_ |
+| f1-modeling | `["review","quick","deep","audit"]` | `notebooks/*.ipynb`, `src/**/*.py` | _(empty — see OQ-13 note)_ |
+| epistemic-agency | `["review","quick","deep","audit"]` | `src/**/*.ts`, `docs/` | _(empty — see OQ-13 note)_ |
+| scholardoc | `["review","quick","deep","survey","audit"]` | `src/**/*.py`, `docs/` | _(empty — see OQ-13 note)_ |
 | vigil | `["review","quick","deep","audit"]` | _(empty — see note)_ | _(empty — see note)_ |
 | agentic-ops | `["review","quick","deep","opus","survey","audit","gates"]` | `.github/workflows/review.yml`, `.github/scripts/`, `docs/adr/` | _(empty — see note)_ |
 
@@ -72,6 +74,36 @@ nothing for empty `extra_allowed_tools`. Refine before or during
 P7-T<n>-3 if vigil's contract surfaces and static-analysis stack
 become known. The same guards apply to the agentic-ops row's
 empty `extra_allowed_tools` (the allowlist is not widened).
+
+**Note on `_(empty — see OQ-13 note)_` cells (all five
+named-consumer rows: prix-guesser, arxiv-sanity-mcp, f1-modeling,
+epistemic-agency, scholardoc).** Per the 2026-05-14 Updated header,
+these rows previously listed `Bash(eslint:*)`, `Bash(tsc:*)` /
+`Bash(tsc --noEmit *)`, `Bash(mypy:*)`, and/or `Bash(ruff:*)`,
+all of which are unsafe under the current threat model:
+
+- ESLint loads `eslint.config.js` / `.eslintrc.js` from PR head
+  as JavaScript (class-1 plugin/config code-loading).
+- mypy loads `plugins` from `mypy.ini` / `pyproject.toml` as
+  importable Python (class-1).
+- `Bash(tsc:*)` permits emit; `Bash(tsc --noEmit *)`'s trailing
+  `*` is argument-injection-defeatable (`tsc --noEmit false
+  --outFile <wrapper-script-path>` chains into wrapper-overwrite)
+  (class-2 wildcard defeat).
+- `Bash(ruff:*)`'s `--output-file <path>` / `--fix` flags are
+  the same wildcard-overwrite class as tsc's `--outFile` (class-2).
+
+Until [OQ-13](../../OPEN_QUESTIONS.md) resolves with an
+architectural decision (wrapper-script discipline / sandboxed
+Path B / threat-model reframe / accept reduced allowlist), all
+five named-consumer rows run with empty `extra_allowed_tools`
+— review remains semantic (Claude reads source files and reasons
+about correctness/style/security inline) but loses structured
+linter / type-checker findings. This is the conservative default
+until the policy gap closes; vigil and agentic-ops rows are also
+empty for unrelated reasons (vigil: contract surfaces not yet
+known; agentic-ops: kernel doesn't install lint binaries at
+runtime — see notes above).
 
 ## Per-repo subtasks (7x; n in {1..7})
 
