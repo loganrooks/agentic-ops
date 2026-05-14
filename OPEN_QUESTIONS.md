@@ -561,21 +561,36 @@ interim wildcard allowlisting if a wrapper script isn't yet
 available, but should be tightened to wrapper-script form per
 OQ-13.
 
-**Interim fix (PR #18).** P7 phase-doc table reduced: `prix-guesser`
-and `epistemic-agency` rows go to empty `extra_allowed_tools`
-(TS-stack consumers lose tsc findings until OQ-13 resolves);
-`arxiv-sanity-mcp`, `f1-modeling`, and `scholardoc` rows drop
-`Bash(mypy:*)` where present and keep only `Bash(ruff:*)` as the
-*least-bad pragmatic interim* (residual class-2 wildcard-defeat
-risk accepted with documented mitigation pending OQ-13 wrapper
-scripts). ONBOARDING.md §"Per-repo customization checklist"
-mirrors this with the broader-class explanation; the
-"verified-safe set" framing is withdrawn (see above). ADR-004
-itself is **not** amended in PR #18 — the architectural decision
-below determines the right shape of the codifying ADR. CR's
-adjacent finding (audit:`<lens>` entries should be bare `audit`
-since lens is selected at trigger time via `audit_target`) is
-also addressed in PR #18 as a pre-existing inconsistency cleanup.
+**Interim fix (PR #18).** All five named-consumer P7 phase-doc
+rows (`prix-guesser`, `arxiv-sanity-mcp`, `f1-modeling`,
+`epistemic-agency`, `scholardoc`) go to empty
+`extra_allowed_tools` until OQ-13 resolves. PR #18's first draft
+kept `Bash(ruff:*)` for the three Python rows as a "least-bad
+pragmatic interim"; Codex P1 on commit `b6b2e70` caught the
+consistency argument (ruff's `--output-file` / `--fix` flags are
+the same wildcard-overwrite class as tsc's `--outFile`, so the
+same logic that empties TS rows empties Python rows too) and the
+ruff entries were dropped in commit `f3...` (see PR #18 commit
+log). ONBOARDING.md §"Per-repo customization checklist" mirrors
+this with the broader-class explanation; the "verified-safe set"
+framing is withdrawn (see above). ADR-004 itself is **not**
+amended in PR #18 — the architectural decision below determines
+the right shape of the codifying ADR. CR's adjacent finding
+(audit:`<lens>` entries should be bare `audit` since lens is
+selected at trigger time via `audit_target`) is also addressed
+in PR #18 as a pre-existing inconsistency cleanup.
+
+**Capability impact of the empty-allowlist interim.** For the five
+affected consumers, Claude reviews now run with the kernel's base
+allowlist only (`gh pr view`, `gh pr diff`, the post-comment
+wrapper). No structured linter findings until wrapper scripts
+land. Claude can still semantically review code (read source, reason
+about correctness/style/security inline) — the loss is the
+type-checker / linter signal that would have anchored findings on
+specific diagnostics. This is a real but bounded review-quality
+regression accepted as the interim posture; OQ-13 resolution
+restores capability via wrapper scripts (Option 2) or sandboxed
+Path B (Option 3).
 
 **Production state at the time of capture.** `loganrooks/prix-guesser`
 PR #1 (merged at `42dc911`) ships with the vulnerable

@@ -92,10 +92,9 @@ Per-repo customizable inputs (defaults in `.github/workflows/review.yml`):
   carry plugin-loading or wildcard-defeat surfaces — do not copy
   values verbatim from any source. See checklist item 5 below
   and [OQ-13](OPEN_QUESTIONS.md) before adding any allowlist
-  entry. The Python rows in the P7 table currently use
-  `Bash(ruff:*)` as the least-bad pragmatic interim; this is
-  documented as residual-risk pending OQ-13 wrapper scripts, not
-  as an example to imitate for new tools.
+  entry. As of 2026-05-14, **all five named-consumer P7 rows use
+  empty `extra_allowed_tools`** pending OQ-13's wrapper-script
+  work; new caller stubs default to empty too.
 - `agents_md_path` — default `AGENTS.md`; missing file tolerated.
 - `repo_label` — default `github.event.repository.name`.
 
@@ -193,13 +192,15 @@ Values for the named consumers are tabled in
      against the wildcard-defeat class.
    - **Wrapper scripts (per OQ-13) are the structural fix.**
      Until they land, the conservative interim is empty
-     `extra_allowed_tools`. The P7 table's `Bash(ruff:*)`
-     entries for the three ruff-using consumers are kept as the
-     least-bad pragmatic default — ruff has no plugin loading
-     and the wildcard defeats require specific invocation
-     patterns Claude is unlikely to be tricked into without
-     sophisticated prompt injection — but this is *residual risk
-     accepted*, not *verified safe*.
+     `extra_allowed_tools` for all five named-consumer P7 rows.
+     Codex P1 on commit `b6b2e70` confirmed the consistency
+     argument: ruff's `--output-file` / `--fix` flags are the
+     same wildcard-overwrite class as tsc's `--outFile` (both
+     can target `central/.github/scripts/post-claude-review.sh`),
+     so the same logic that empties TS rows empties Python rows
+     too. Per-row capability loss is real but bounded — Claude
+     can still semantically review the code without structured
+     linter findings.
 
    Tools without plugin-loading surfaces (e.g., `ruff`,
    `shellcheck`, `actionlint`, `yamllint`, `rg`, `jq`, `pyright`)
