@@ -260,7 +260,11 @@ workflow `review.yml` if patching needed.
 ## F-007: Supervisor↔/goal coordination loop has no explicit dormancy contract
 
 **Status:** MITIGATED (poller + skill + prompt amendment drafted
-2026-05-14T20:50Z; not yet codified into kernel).
+2026-05-14T20:50Z); **systemic fix in flight as PR #20**
+(`docs/escalation-dormancy-contract` branch) codifying the
+contract into `EXECUTION-MODEL.md` §"Escalation dormancy
+contract" + `AGENTS.md` §"Hard rules" reference. Will move to
+RESOLVED on PR #20 merge.
 
 **Surfaced:** 2026-05-14, after the supervisor-side handling of
 agentic-ops PR #18 plus consumer-side amends produced two distinct
@@ -326,8 +330,10 @@ fold the contract into EXECUTION-MODEL.md as a first-class section
   intermediary (the user-noted wishlist; currently not supported,
   formal escalation file is the mechanism).
 
-**Where systemic fix lands.** EXECUTION-MODEL.md (new §"Escalation
-dormancy contract"), plus installer surface from OQ-12 resolution.
+**Where systemic fix lands.** EXECUTION-MODEL.md §"Escalation
+dormancy contract" + AGENTS.md §"Hard rules" reference (PR #20,
+opened 2026-05-14T21:15Z); installer surface for the
+supervisor-side companion deferred to OQ-12 resolution.
 
 ---
 
