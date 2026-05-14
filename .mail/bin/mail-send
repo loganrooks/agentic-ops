@@ -1,0 +1,266 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/mail-common.sh
+source "$SCRIPT_DIR/lib/mail-common.sh"
+
+workspace="$PWD"
+sender=""
+recipient=""
+kind=""
+thread_id=""
+in_reply_to=""
+priority="normal"
+expects_reply="false"
+expires_at=""
+decision_class="low-stakes"
+tags=""
+evidence=""
+attachment=""
+phase_id=""
+slug=""
+body_over_cap="false"
+attachment_base=""
+attachment_dir=""
+normalized_evidence_items=()
+normalized_evidence_count=0
+normalized_tag_items=()
+normalized_tag_count=0
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --workspace) workspace="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --sender) sender="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --recipient) recipient="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --kind) kind="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --thread-id) thread_id="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --in-reply-to) in_reply_to="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --priority) priority="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --expects-reply) expects_reply="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --expires-at) expires_at="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --decision-class) decision_class="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --tags) tags="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --evidence) evidence="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --attachment) attachment="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --phase-id) phase_id="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --slug) slug="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    -h | --help)
+      printf 'usage: mail-send --sender ROLE --recipient ROLE --kind KIND --thread-id ID [options] < body.md\n'
+      exit 0
+      ;;
+    *) usage_error "unknown argument $1" ;;
+  esac
+done
+
+[ -n "$sender" ] || usage_error "--sender is required"
+[ -n "$recipient" ] || usage_error "--recipient is required"
+[ -n "$kind" ] || usage_error "--kind is required"
+[ -n "$thread_id" ] || usage_error "--thread-id is required"
+role_is_valid "$sender" || usage_error "invalid --sender: $sender"
+role_is_valid "$recipient" || usage_error "invalid --recipient: $recipient"
+kind_is_valid "$kind" || usage_error "invalid --kind: $kind"
+priority_is_valid "$priority" || usage_error "invalid --priority: $priority"
+bool_is_valid "$expects_reply" || usage_error "--expects-reply must be true or false"
+decision_class_is_valid "$decision_class" || usage_error "invalid --decision-class: $decision_class"
+[ -z "$expires_at" ] || iso8601_is_valid "$expires_at" || usage_error "invalid --expires-at: $expires_at"
+
+if [ "$decision_class" = "high-stakes" ]; then
+  error_exit "high-stakes messages are rejected; route this through the consuming repo's escalation discipline"
+fi
+
+if [ -n "$evidence" ]; then
+  IFS=',' read -r -a evidence_items <<< "$evidence"
+  for item in "${evidence_items[@]}"; do
+    item="$(trim_value "$item")"
+    if [ -n "$item" ]; then
+      normalized_evidence_items+=("$item")
+      normalized_evidence_count=$((normalized_evidence_count + 1))
+    fi
+  done
+fi
+
+if [ -n "$tags" ]; then
+  IFS=',' read -r -a tag_items <<< "$tags"
+  for item in "${tag_items[@]}"; do
+    item="$(trim_value "$item")"
+    if [ -n "$item" ]; then
+      normalized_tag_items+=("$item")
+      normalized_tag_count=$((normalized_tag_count + 1))
+    fi
+  done
+fi
+
+if [ "$kind" = "answer" ] && [ "$normalized_evidence_count" -eq 0 ]; then
+  error_exit "kind: answer requires --evidence"
+fi
+
+workspace="$(workspace_path "$workspace")"
+ensure_role_dirs "$workspace"
+
+[ -n "$phase_id" ] || phase_id="$(phase_id_default "$workspace")"
+[ -n "$slug" ] || slug="$thread_id"
+slug="$(slugify "$slug")"
+[ -n "$slug" ] || slug="message"
+
+timestamp="$(iso_utc_now)"
+nonce="$(message_nonce)"
+message_id="msg_${timestamp}_${nonce}"
+filename_ts="${timestamp//:/-}"
+filename="${filename_ts}__${sender}__${recipient}__${slug}.md"
+tmp_file="$workspace/.mail/$recipient/inbox/.tmp/$message_id.md"
+dest_file="$workspace/.mail/$recipient/inbox/$filename"
+processed_file="$workspace/.mail/$recipient/processed/$filename"
+
+body_tmp="$(mktemp "${TMPDIR:-/tmp}/agentic-mail-body.XXXXXX")"
+body_full_tmp=""
+budget_lock=""
+delivered="false"
+cleanup() {
+  rm -f "$body_tmp"
+  rm -f "$tmp_file"
+  if [ -n "$body_full_tmp" ]; then
+    rm -f "$body_full_tmp"
+  fi
+  if [ "$delivered" != "true" ] && [ -n "$attachment_dir" ]; then
+    rm -rf "$attachment_dir"
+  fi
+  if [ -n "$budget_lock" ]; then
+    rmdir "$budget_lock" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
+cat > "$body_tmp"
+body_bytes="$(wc -c < "$body_tmp" | tr -d ' ')"
+
+if [ "$body_bytes" -gt "$BODY_HARD_CAP_BYTES" ]; then
+  if [ -z "$attachment" ]; then
+    error_exit "body-over-cap: body exceeds BODY_HARD_CAP_BYTES and --attachment was not supplied"
+  fi
+  body_over_cap="true"
+  body_full_tmp="$(mktemp "${TMPDIR:-/tmp}/agentic-mail-body-full.XXXXXX")"
+  cp "$body_tmp" "$body_full_tmp"
+  attachment_base="$(basename "$attachment")"
+  case "$attachment_base" in
+    "" | "." | ".." | "/") usage_error "invalid --attachment name: $attachment" ;;
+  esac
+  attachment_dir="$workspace/.mail/attachments/$message_id"
+  attachment=".mail/attachments/$message_id/$attachment_base"
+  printf 'see attachment: %s\n' "$attachment" > "$body_tmp"
+  body_bytes="$(wc -c < "$body_tmp" | tr -d ' ')"
+fi
+
+if [ "$body_bytes" -gt "$BODY_HARD_CAP_BYTES" ]; then
+  error_exit "body-over-cap: rewritten body still exceeds BODY_HARD_CAP_BYTES"
+fi
+
+if [ "$body_over_cap" != "true" ] && [ -n "$attachment" ]; then
+  error_exit "--attachment is only valid when body exceeds BODY_HARD_CAP_BYTES"
+fi
+
+budget_lock="$(acquire_budget_lock "$workspace")"
+
+if [ -e "$dest_file" ]; then
+  error_exit "filename-collision: $dest_file"
+fi
+if [ -e "$processed_file" ]; then
+  error_exit "filename-collision: $processed_file"
+fi
+archive_collision="$(find "$workspace/.mail/$recipient/archive" -type f -name "$filename" -print -quit 2>/dev/null || true)"
+if [ -n "$archive_collision" ]; then
+  error_exit "filename-collision: $archive_collision"
+fi
+
+thread_count="$(count_thread_messages "$workspace" "$thread_id")"
+if [ "$thread_count" -ge "$THREAD_CAP_MESSAGES" ]; then
+  error_exit "thread-cap-exceeded: thread $thread_id already has $thread_count messages"
+fi
+
+budget_count="$(read_budget_count "$workspace" "$phase_id")"
+[ -n "$budget_count" ] || budget_count=0
+if [ "$budget_count" -ge "$PER_PHASE_BUDGET_MESSAGES" ]; then
+  error_exit "phase-budget-exceeded: phase $phase_id already has $budget_count messages"
+fi
+
+if [ "$body_over_cap" = "true" ]; then
+  mkdir -p "$attachment_dir"
+  cp "$body_full_tmp" "$attachment_dir/$attachment_base"
+fi
+
+{
+  printf '%s\n' '---'
+  printf 'protocol_version: %s\n' "$PROTOCOL_VERSION"
+  printf 'message_id: %s\n' "$(yaml_quote "$message_id")"
+  printf 'sender: %s\n' "$(yaml_quote "$sender")"
+  printf 'recipient: %s\n' "$(yaml_quote "$recipient")"
+  printf 'timestamp: %s\n' "$(yaml_quote "$timestamp")"
+  printf 'thread_id: %s\n' "$(yaml_quote "$thread_id")"
+  printf 'kind: %s\n' "$(yaml_quote "$kind")"
+  printf 'plan_sha: null\n'
+  if [ -n "$in_reply_to" ]; then
+    printf 'in_reply_to: %s\n' "$(yaml_quote "$in_reply_to")"
+  else
+    printf 'in_reply_to: null\n'
+  fi
+  printf 'priority: %s\n' "$(yaml_quote "$priority")"
+  printf 'expects_reply: %s\n' "$expects_reply"
+  if [ -n "$expires_at" ]; then
+    printf 'expires_at: %s\n' "$(yaml_quote "$expires_at")"
+  else
+    printf 'expires_at: null\n'
+  fi
+  printf 'decision_class: %s\n' "$(yaml_quote "$decision_class")"
+  if [ "$normalized_tag_count" -gt 0 ]; then
+    printf 'tags:\n'
+    for tag in "${normalized_tag_items[@]}"; do
+      printf '  - %s\n' "$(yaml_quote "$tag")"
+    done
+  else
+    printf 'tags: []\n'
+  fi
+  if [ "$normalized_evidence_count" -gt 0 ]; then
+    printf 'evidence:\n'
+    for item in "${normalized_evidence_items[@]}"; do
+      printf '  - %s\n' "$(yaml_quote "$item")"
+    done
+  else
+    printf 'evidence: []\n'
+  fi
+  if [ -n "$attachment" ]; then
+    printf 'attachment: %s\n' "$(yaml_quote "$attachment")"
+  else
+    printf 'attachment: null\n'
+  fi
+  printf '%s\n' '---'
+  cat "$body_tmp"
+} > "$tmp_file"
+
+next_budget_count=$((budget_count + 1))
+write_budget_count "$workspace" "$phase_id" "$next_budget_count"
+
+if ! mv "$tmp_file" "$dest_file"; then
+  write_budget_count "$workspace" "$phase_id" "$budget_count" || true
+  if [ "$body_over_cap" = "true" ]; then
+    rm -rf "$attachment_dir"
+  fi
+  error_exit "message-delivery-failed: $dest_file"
+fi
+rm -f "$tmp_file"
+delivered="true"
+
+audit_file="$workspace/.mail/.audit.jsonl"
+if ! printf '{"timestamp":"%s","message_id":"%s","sender":"%s","recipient":"%s","thread_id":"%s","phase_id":"%s","filename":"%s"}\n' \
+  "$(json_escape "$timestamp")" \
+  "$(json_escape "$message_id")" \
+  "$(json_escape "$sender")" \
+  "$(json_escape "$recipient")" \
+  "$(json_escape "$thread_id")" \
+  "$(json_escape "$phase_id")" \
+  "$(json_escape "$filename")" >> "$audit_file"; then
+  printf 'warning: audit append failed after delivery: %s\n' "$audit_file" >&2
+fi
+rmdir "$budget_lock" 2>/dev/null || true
+budget_lock=""
+
+printf '%s\n' "$dest_file"

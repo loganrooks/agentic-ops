@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/mail-common.sh
+source "$SCRIPT_DIR/lib/mail-common.sh"
+
+workspace="$PWD"
+reset_budget="false"
+phase_id=""
+budget_lock=""
+active_tmp=""
+
+cleanup() {
+  if [ -n "$active_tmp" ]; then
+    rm -f "$active_tmp"
+  fi
+  if [ -n "$budget_lock" ]; then
+    rmdir "$budget_lock" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --workspace) workspace="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --phase-id) phase_id="$(option_value_or_die "$1" "${2:-}")"; shift 2 ;;
+    --reset-budget) reset_budget="true"; shift ;;
+    -h | --help)
+      printf 'usage: mail-status [--workspace PATH] [--phase-id ID] [--reset-budget]\n'
+      exit 0
+      ;;
+    *) usage_error "unknown argument $1" ;;
+  esac
+done
+
+workspace="$(workspace_path "$workspace")"
+ensure_role_dirs "$workspace"
+[ -n "$phase_id" ] || phase_id="$(phase_id_default "$workspace")"
+
+if [ "$reset_budget" = "true" ]; then
+  budget_lock="$(acquire_budget_lock "$workspace")"
+  write_budget_count "$workspace" "$phase_id" 0
+  rmdir "$budget_lock" 2>/dev/null || true
+  budget_lock=""
+fi
+
+printf '%-18s %8s\n' 'Metric' 'Value'
+printf '%-18s %8s\n' '------' '-----'
+
+for role in claude codex human; do
+  shopt -s nullglob
+  files=("$workspace/.mail/$role/inbox"/*.md)
+  printf '%-18s %8s\n' "unread:$role" "${#files[@]}"
+done
+
+active_tmp="$(mktemp "${TMPDIR:-/tmp}/agentic-mail-status.XXXXXX")"
+expired_count=0
+
+while IFS= read -r file; do
+  case "$file" in
+    */inbox/*.md | */processed/*.md)
+      thread_id="$(frontmatter_value "$file" thread_id)"
+      [ -n "$thread_id" ] && printf '%s\n' "$thread_id" >> "$active_tmp"
+      ;;
+  esac
+  case "$file" in
+    */inbox/*.md | */processed/*.md)
+      expires_at="$(frontmatter_value "$file" expires_at)"
+      if is_past_iso_utc "$expires_at"; then
+        expired_count=$((expired_count + 1))
+      fi
+      ;;
+  esac
+done < <(message_files "$workspace")
+
+active_threads=0
+if [ -s "$active_tmp" ]; then
+  active_threads="$(sort -u "$active_tmp" | wc -l | tr -d ' ')"
+fi
+
+audit_lines=0
+if [ -f "$workspace/.mail/.audit.jsonl" ]; then
+  audit_lines="$(wc -l < "$workspace/.mail/.audit.jsonl" | tr -d ' ')"
+fi
+
+budget_count="$(read_budget_count "$workspace" "$phase_id")"
+[ -n "$budget_count" ] || budget_count=0
+
+printf '%-18s %8s\n' 'active_threads' "$active_threads"
+printf '%-18s %8s\n' 'expired_messages' "$expired_count"
+printf '%-18s %8s\n' 'audit_log_lines' "$audit_lines"
+printf '%-18s %8s\n' "budget:$phase_id" "$budget_count"
