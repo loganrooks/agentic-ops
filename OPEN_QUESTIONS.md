@@ -522,7 +522,7 @@ plugin-loading defeats, but a parallel defeat class exists —
 | Tool | Wildcard-defeat surface | Verified |
 |---|---|---|
 | `ruff` | `--output-file <path>`, `--fix`, `format` (truncates files) | Codex P1 on agentic-ops PR #18 (`ruff check --help`) |
-| `pyright` | `--pythonpath <FILE>` executes the file | Codex P1 on agentic-ops PR #18 (smoke test) |
+| `pyright` | `--pythonpath <PATH>` invokes the binary at PATH for environment discovery; if attacker stages an executable file in PR head, exec()'d with review-job env | Codex P1 on agentic-ops PR #18 (smoke test); refined via CR Minor on PR #18 round 2 (Microsoft pyright docs confirm `--pythonpath` is interpreter-path config; the defeat is conditional on attacker-staged executable) |
 | `yq` (mfarah) | `-i / --inplace` | Codex P1 on agentic-ops PR #18 (yq README) |
 | `ast-grep` | `--rewrite`, `-U / --update-all` | Codex P1 on agentic-ops PR #18 (ast-grep run reference) |
 | `actionlint` | `-shellcheck=PATH` invokes path as external tool | Identified during PR #18 disposition |
@@ -533,14 +533,22 @@ safe in general. Almost every CLI has at least one defeat surface
 under sufficient args. The defeats fall into two classes:
 
 1. **Plugin/config code-loading.** `eslint`, `mypy`, `pylint`,
-   `flake8`, `pyright`. The tool's *default* invocation loads
-   PR-controlled code from auto-discovered config files. Worst
-   class — exploit requires no special args.
+   `flake8`. The tool's *default* invocation loads PR-controlled
+   code from auto-discovered config files. Worst class — exploit
+   requires no special args. **Pyright is NOT in this class** —
+   Microsoft explicitly rejected a plugin model for pyright per
+   [pyright issue #607](https://github.com/microsoft/pyright/issues/607)
+   citing security concerns; `pyrightconfig.json` is JSON-only
+   with no executable directives. Pyright's defeat (above) is
+   class-2 only (specific arg + attacker-staged executable file
+   in PR head).
 2. **Arbitrary file write or `--exec`-equivalent under args.**
-   `ruff`, `tsc`, `yq`, `ast-grep`, `actionlint`, `rg`, and
-   likely many more. The defeat requires Claude to be tricked
-   into invoking the tool with specific args. Practically
-   harder to exploit but structurally still a hole.
+   `ruff`, `tsc`, `pyright` (via `--pythonpath`), `yq`, `ast-grep`,
+   `actionlint`, `rg`, and likely many more. The defeat requires
+   Claude to be tricked into invoking the tool with specific args
+   (and, for pyright, also requires an attacker-committed
+   executable file in PR head). Practically harder to exploit
+   than class 1 but structurally still a hole.
 
 **The structural answer is wrapper scripts** (Option 2 below) for
 both classes. The two classes have different practical-exploit

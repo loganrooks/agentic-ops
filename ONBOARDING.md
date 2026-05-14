@@ -178,9 +178,10 @@ Values for the named consumers are tabled in
    has at least one wildcard-defeat surface — output-file flags
    (`ruff --output-file`), in-place edit modes (`yq -i`,
    `ast-grep --rewrite`), pre-processor command flags
-   (`rg --pre`), config-via-arg flags that execute the path
-   (`pyright --pythonpath` runs the file), or transitive tool
-   invocation (`actionlint -shellcheck=PATH`). Any of these can
+   (`rg --pre`), interpreter-path config that exec()'s the binary
+   if attacker stages an executable in PR head
+   (`pyright --pythonpath`), or transitive tool invocation
+   (`actionlint -shellcheck=PATH`). Any of these can
    be chained into the wrapper-overwrite attack class
    (`tsc --noEmit false --outFile <wrapper-path>`) when wrapper
    scripts live in the same workspace as the tool's writable
@@ -201,9 +202,9 @@ Values for the named consumers are tabled in
      accepted*, not *verified safe*.
 
    Tools without plugin-loading surfaces (e.g., `ruff`,
-   `shellcheck`, `actionlint`, `yamllint`, `rg`, `jq`) are at
-   the safer end of the spectrum than tools with plugin loading
-   (`eslint`, `mypy`, `flake8`, `pylint`, `pyright`). Both ends
+   `shellcheck`, `actionlint`, `yamllint`, `rg`, `jq`, `pyright`)
+   are at the safer end of the spectrum than tools with plugin
+   loading (`eslint`, `mypy`, `flake8`, `pylint`). Both ends
    require wrapper scripts or exact-form pinning to be fully
    safe; the difference is that plugin-loading tools have
    *immediate* arbitrary code execution on default invocation
