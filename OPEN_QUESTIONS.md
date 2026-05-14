@@ -511,29 +511,75 @@ with attacker-controlled JavaScript; executable bit preserved by
 Node's `fs.writeFile`; next wrapper invocation runs attacker code as
 bash via JS-shell polyglot. Codex P1 verified locally with tsc 6.0.3.
 
-**Genuinely safe set** (verified no plugin/code-loading surface):
-`ruff` (Rust binary, no plugins), `shellcheck`, `actionlint`,
-`yamllint`, `pyright` (bundled binary, no Python plugin loading),
-`rg`, `jq`, `yq`, `ast-grep`.
+**Initial "safer set" claim — withdrawn.** PR #18's first draft
+listed `ruff`, `shellcheck`, `actionlint`, `yamllint`, `pyright`,
+`rg`, `jq`, `yq`, `ast-grep` as "verified safe (no plugin/code-loading
+surface)." Codex review on PR #18 (4× P1 findings) demonstrated that
+this framing was wrong: the safe-set claim only addressed
+plugin-loading defeats, but a parallel defeat class exists —
+**arbitrary file write or code execution under wildcard arguments**:
+
+| Tool | Wildcard-defeat surface | Verified |
+|---|---|---|
+| `ruff` | `--output-file <path>`, `--fix`, `format` (truncates files) | Codex P1 on agentic-ops PR #18 (`ruff check --help`) |
+| `pyright` | `--pythonpath <FILE>` executes the file | Codex P1 on agentic-ops PR #18 (smoke test) |
+| `yq` (mfarah) | `-i / --inplace` | Codex P1 on agentic-ops PR #18 (yq README) |
+| `ast-grep` | `--rewrite`, `-U / --update-all` | Codex P1 on agentic-ops PR #18 (ast-grep run reference) |
+| `actionlint` | `-shellcheck=PATH` invokes path as external tool | Identified during PR #18 disposition |
+| `rg` | `--pre <COMMAND>` runs command on each file | Identified during PR #18 disposition |
+
+**Restated insight.** No `Bash(<tool>:*)` wildcard is verifiably
+safe in general. Almost every CLI has at least one defeat surface
+under sufficient args. The defeats fall into two classes:
+
+1. **Plugin/config code-loading.** `eslint`, `mypy`, `pylint`,
+   `flake8`, `pyright`. The tool's *default* invocation loads
+   PR-controlled code from auto-discovered config files. Worst
+   class — exploit requires no special args.
+2. **Arbitrary file write or `--exec`-equivalent under args.**
+   `ruff`, `tsc`, `yq`, `ast-grep`, `actionlint`, `rg`, and
+   likely many more. The defeat requires Claude to be tricked
+   into invoking the tool with specific args. Practically
+   harder to exploit but structurally still a hole.
+
+**The structural answer is wrapper scripts** (Option 2 below) for
+both classes. The two classes have different practical-exploit
+difficulty but identical wrapper-script remediation.
+
+**Tools without plugin-loading surfaces** (still subject to
+class 2 wildcard defeats): `ruff`, `shellcheck`, `actionlint`,
+`yamllint`, `rg`, `jq` — these are the *least-bad* candidates for
+interim wildcard allowlisting if a wrapper script isn't yet
+available, but should be tightened to wrapper-script form per
+OQ-13.
 
 **Interim fix (PR #18).** P7 phase-doc table reduced: `prix-guesser`
 and `epistemic-agency` rows go to empty `extra_allowed_tools`
 (TS-stack consumers lose tsc findings until OQ-13 resolves);
-`arxiv-sanity-mcp` and `scholardoc` rows drop `Bash(mypy:*)`,
-keeping only `Bash(ruff:*)`. ONBOARDING.md §"Per-repo customization
-checklist" mirrors this with the broader-class explanation. ADR-004
+`arxiv-sanity-mcp`, `f1-modeling`, and `scholardoc` rows drop
+`Bash(mypy:*)` where present and keep only `Bash(ruff:*)` as the
+*least-bad pragmatic interim* (residual class-2 wildcard-defeat
+risk accepted with documented mitigation pending OQ-13 wrapper
+scripts). ONBOARDING.md §"Per-repo customization checklist"
+mirrors this with the broader-class explanation; the
+"verified-safe set" framing is withdrawn (see above). ADR-004
 itself is **not** amended in PR #18 — the architectural decision
-below determines the right shape of the codifying ADR.
+below determines the right shape of the codifying ADR. CR's
+adjacent finding (audit:`<lens>` entries should be bare `audit`
+since lens is selected at trigger time via `audit_target`) is
+also addressed in PR #18 as a pre-existing inconsistency cleanup.
 
 **Production state at the time of capture.** `loganrooks/prix-guesser`
 PR #1 (merged at `42dc911`) ships with the vulnerable
 `Bash(tsc --noEmit *)` wildcard. `loganrooks/arxiv-sanity-mcp` PR #2
 (open, /goal paused) ships with the vulnerable `Bash(ruff:*),Bash(mypy:*)`
 caller stub. Both require consumer-side follow-up patches after PR
-#18 lands. The practical exploit risk today is nil because the
-named-consumer set (per ADR-009 §Decision §1) is private and only
-the maintainer authors PRs against these repos, but the substrate's
-discipline assumes hostile PR-head input per ADR-007.
+18 lands (mypy dropped from arxiv-sanity-mcp; tsc wildcard dropped
+from prix-guesser; ruff retained as the least-bad interim default).
+The practical exploit risk today is nil because the named-consumer
+set (per ADR-009 §Decision §1) is private and only the maintainer
+authors PRs against these repos, but the substrate's discipline
+assumes hostile PR-head input per ADR-007.
 
 **Architectural decision space (the real OQ).**
 

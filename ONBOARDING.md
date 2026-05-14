@@ -82,13 +82,20 @@ Per-repo customizable inputs (defaults in `.github/workflows/review.yml`):
   [ADR-001](docs/adr/ADR-001-mode-taxonomy.md).
 - `review_focus_paths` — globs prioritized in `review` mode.
 - `gates_paths` — required if `gates` is in `enabled_modes`.
-- `extra_allowed_tools` — static-analysis-only additions (e.g.
-  `Bash(ruff:*),Bash(mypy:*)`). Per
+- `extra_allowed_tools` — static-analysis-only additions. Per
   [ADR-004](docs/adr/ADR-004-allowlist-policy.md), no test
   runners, installers, build tools, network fetchers, or
   code-execution surfaces. Compile-capable tools must be pinned
   to non-emitting invocations (e.g. `tsc --noEmit`, not bare
-  `tsc:*`); see ADR-004 §"Forbidden entries".
+  `tsc:*`); see ADR-004 §"Forbidden entries". **Important:**
+  ADR-004 §Acceptable lists tools that have since been shown to
+  carry plugin-loading or wildcard-defeat surfaces — do not copy
+  values verbatim from any source. See checklist item 5 below
+  and [OQ-13](OPEN_QUESTIONS.md) before adding any allowlist
+  entry. The Python rows in the P7 table currently use
+  `Bash(ruff:*)` as the least-bad pragmatic interim; this is
+  documented as residual-risk pending OQ-13 wrapper scripts, not
+  as an example to imitate for new tools.
 - `agents_md_path` — default `AGENTS.md`; missing file tolerated.
 - `repo_label` — default `github.event.repository.name`.
 
@@ -166,10 +173,42 @@ Values for the named consumers are tabled in
      only via wrapper script (deferred to OQ-13). Until then,
      omit.
 
-   **Currently-safe set** (verified no plugin/code-loading surface):
-   `ruff` (Rust binary), `shellcheck`, `actionlint`, `yamllint`,
-   `pyright` (bundled binary), `rg`, `jq`, `yq`, `ast-grep`. Other
-   tools require independent verification before allowlisting.
+   **There is no general "wildcard-safe set."** Codex review on
+   PR #18 (4× P1 findings) demonstrated that almost any CLI tool
+   has at least one wildcard-defeat surface — output-file flags
+   (`ruff --output-file`), in-place edit modes (`yq -i`,
+   `ast-grep --rewrite`), pre-processor command flags
+   (`rg --pre`), config-via-arg flags that execute the path
+   (`pyright --pythonpath` runs the file), or transitive tool
+   invocation (`actionlint -shellcheck=PATH`). Any of these can
+   be chained into the wrapper-overwrite attack class
+   (`tsc --noEmit false --outFile <wrapper-path>`) when wrapper
+   scripts live in the same workspace as the tool's writable
+   targets. Two consequences:
+
+   - **No tool should be claimed "verified safe" under a
+     `Bash(<tool>:*)` wildcard pattern.** This includes tools
+     listed in ADR-004 §Acceptable that have not been audited
+     against the wildcard-defeat class.
+   - **Wrapper scripts (per OQ-13) are the structural fix.**
+     Until they land, the conservative interim is empty
+     `extra_allowed_tools`. The P7 table's `Bash(ruff:*)`
+     entries for the three ruff-using consumers are kept as the
+     least-bad pragmatic default — ruff has no plugin loading
+     and the wildcard defeats require specific invocation
+     patterns Claude is unlikely to be tricked into without
+     sophisticated prompt injection — but this is *residual risk
+     accepted*, not *verified safe*.
+
+   Tools without plugin-loading surfaces (e.g., `ruff`,
+   `shellcheck`, `actionlint`, `yamllint`, `rg`, `jq`) are at
+   the safer end of the spectrum than tools with plugin loading
+   (`eslint`, `mypy`, `flake8`, `pylint`, `pyright`). Both ends
+   require wrapper scripts or exact-form pinning to be fully
+   safe; the difference is that plugin-loading tools have
+   *immediate* arbitrary code execution on default invocation
+   while non-plugin tools have *conditional* defeats requiring
+   specific args.
 
 ## Per-repo agent brief
 
