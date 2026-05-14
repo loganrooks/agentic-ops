@@ -257,6 +257,165 @@ workflow `review.yml` if patching needed.
 
 ---
 
+## F-007: Supervisor↔/goal coordination loop has no explicit dormancy contract
+
+**Status:** MITIGATED (poller + skill + prompt amendment drafted
+2026-05-14T20:50Z; not yet codified into kernel).
+
+**Surfaced:** 2026-05-14, after the supervisor-side handling of
+agentic-ops PR #18 plus consumer-side amends produced two distinct
+coordination problems on /goal restart (see F-003, F-004).
+
+**What.** When /goal escalates, three things happen implicitly that
+have no protocol:
+
+- /goal does not have a defined "dormant" state. It writes the
+  escalation file and then either (a) hard-halts the session
+  (losing context if not re-prompted), or (b) does the next thing
+  it thinks is OK to do (which can collide with supervisor work).
+- The supervisor (Claude) has no automated detection that an
+  escalation fired. Without out-of-band notification, the
+  maintainer must ping the supervisor or vice-versa.
+- The exit condition (the `RESOLVED:` line per
+  [`.planning/EXECUTION-MODEL.md`](.planning/EXECUTION-MODEL.md)
+  §"User-resolved escalation") is well-defined, but the polling
+  cadence on /goal's side is not, and the supervisor's responsibility
+  to write the line cleanly (citing the exact maintainer signal,
+  scoping to the right file) is not codified.
+
+These gaps cumulatively create:
+
+- Re-litigation of prior state (F-003).
+- Context gaps that read as STATE.md "untrustworthiness" (F-004).
+- Shadow-replacement of /goal work by supervisor when timing is
+  uncertain (called out in STATE.md `## Discipline note for /goal
+  resume`).
+
+**Workaround used.** Three artifacts drafted as a coordination kit:
+
+- `~/.local/bin/escalation-poller.sh` — supervisor-side poller for
+  the escalations directory; macOS osascript notifications.
+- `~/.claude/skills/escalation-watch/SKILL.md` — supervisor-side
+  Claude Code skill describing the per-file resolution protocol,
+  adjudication buckets (maintainer-only / policy-on-file /
+  ambiguous), and STATE.md sync responsibilities.
+- `.planning/auto-execution/goal-prompt-amendment.md` — paragraph
+  to paste into the /goal prompt at session start; defines the
+  DORMANT state, polling cadence (60s for first 10 min, 5 min for
+  next hour, 15 min after; 4-hour timeout writes follow-up
+  escalation), and prohibits unilateral state mutation /
+  re-litigation.
+
+These are mitigation, not a structural fix — they are not yet kernel
+surface (no installer, no schema, not referenced from
+EXECUTION-MODEL.md). Future iteration after empirical use should
+fold the contract into EXECUTION-MODEL.md as a first-class section
+("§ Escalation dormancy contract").
+
+**Long-term resolutions to consider:**
+
+- Codify the dormancy contract into EXECUTION-MODEL.md as a
+  protocol-level section (matching §"User-resolved escalation").
+- Ship the poller + skill as part of the agentic-ops install
+  pipeline (cf. OQ-12 install/onboarding shape).
+- Replace osascript notifications with a more portable channel
+  (e.g., a webhook into the supervisor's chat) so the loop works
+  off-Mac.
+- Investigate whether the /goal Codex application can ping the
+  supervisor session directly without the escalation file as
+  intermediary (the user-noted wishlist; currently not supported,
+  formal escalation file is the mechanism).
+
+**Where systemic fix lands.** EXECUTION-MODEL.md (new §"Escalation
+dormancy contract"), plus installer surface from OQ-12 resolution.
+
+---
+
+## F-008: No high-reasoning gate for "merge this PR" maintainer signals
+
+**Status:** OPEN
+
+**Surfaced:** 2026-05-14T20:50Z, while arxiv-sanity-mcp PR #2 sits
+mechanically clean (`mergeStateStatus=CLEAN`, CI `test=SUCCESS`,
+CodeRabbit `SUCCESS`, all review threads resolved) awaiting an
+explicit maintainer `Merge arxiv-sanity-mcp PR #2` signal per
+P7-T2-5.
+
+**What.** The hard rule "do not merge any PR unless the maintainer
+explicitly says `Merge` for that PR" is the right safety contract.
+But it places the entire merge-quality decision on the maintainer's
+shoulders at signal-time, with no AI-side guardrail or quality
+review intermediating between "PR is mechanically clean" and
+"maintainer types Merge."
+
+For the named-consumer onboarding pattern (P7), each merge signal
+covers a near-template change (caller-stub workflow file, ~25
+lines). The decision space is small. Even so:
+
+- The maintainer must remember the specific PR number, the
+  current expected caller-stub shape (post-PR-#18 all-empty
+  `extra_allowed_tools`, normalized `enabled_modes`, etc.), and the
+  recurring template-level findings (F-002).
+- /goal's escalation message is structured but not exhaustive. It
+  reports observed state but does not run a "would I merge this"
+  checklist of its own.
+- CodeRabbit and Codex review per-finding but do not produce a
+  holistic "this PR is mergeable / this PR is mergeable with
+  caveats / this PR should not merge" verdict.
+
+The user wishlist (2026-05-14 compaction args): a high-reasoning
+Claude agent that watches for "ready to merge" PRs and produces
+both (a) a guardrail checklist (template-shape, no plugin-loading
+tools, no wildcard arg-injection-defeatable tools, focus paths
+exist, repo_label matches, agents_md_path correct, branch is the
+expected feat branch, no force-push-against-protected-branch in
+history) and (b) a quality review (general PR shape against
+ONBOARDING.md and ADR-001).
+
+**Workaround used.** None yet. The maintainer signal is the only
+gate; supervisor (Claude) reads the PR ad-hoc when surfacing the
+escalation but does not produce a structured verdict.
+
+**Long-term resolutions to consider:**
+
+- A new Claude Code skill (sibling to `escalation-watch`) — call
+  it `pr-merge-review` — that takes a PR URL, runs the guardrail
+  checklist deterministically (parse YAML; check fields against a
+  static spec from ONBOARDING.md), runs the quality review
+  reasoning, and produces a verdict. The skill is invoked by the
+  supervisor when surfacing a merge-gate escalation; output is
+  attached to the surface-message for the maintainer to read.
+- A pre-merge GitHub Action (separate from the kernel review
+  workflow) that runs the guardrail checklist on caller-stub PRs
+  and posts a comment. This is more automated but adds CI surface
+  and is harder to iterate on.
+- A `pr-merge-review` agent (Anthropic Claude SDK) running as a
+  scheduled task (every 15 min) that scans `gh pr list` for any
+  PR matching `mergeStateStatus=CLEAN AND author=loganrooks` and
+  posts its verdict to the PR as a comment. The maintainer reads
+  the comment and decides whether to type `Merge`.
+- For non-template PRs (kernel changes, ADR amendments, OQ
+  additions), the high-reasoning agent's spec should be different
+  — there the value is "did this PR introduce regression risk in
+  any of the kernel's safety invariants" rather than "does this
+  match the caller-stub template."
+
+**Where systemic fix lands.** New skill at
+`~/.claude/skills/pr-merge-review/SKILL.md`; ONBOARDING.md addition
+documenting the merge checklist as a first-class artifact; possibly
+a new ADR (ADR-010 or similar) capturing the AI-side merge gate as
+distinct from the maintainer-side merge signal.
+
+**Note.** The user observed (2026-05-14) that "would be wonderful if
+the codex application could somehow message / ping here without
+doing a formal escalation but seems that is the mechanism that we
+should instruct it to do for now." For the immediate term, the
+formal-escalation mechanism remains the right path; the
+high-reasoning agent reduces the decision burden at signal-time but
+does not change the signal mechanism itself.
+
+---
+
 ## How to add an entry
 
 Append to bottom with the next sequential `F-NNN` ID. Prefer creating
