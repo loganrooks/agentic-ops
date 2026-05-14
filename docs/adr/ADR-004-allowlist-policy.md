@@ -1,6 +1,6 @@
 # ADR-004: extra_allowed_tools policy — static analysis only
 
-Status: accepted
+Status: accepted; partially superseded by ADR-010 (re: §Decision Acceptable entries — eslint reclassified to Forbidden)
 Date: 2026-05-08
 
 ## Context
@@ -57,6 +57,13 @@ Acceptable entries (parse code, do not execute it):
 | ---------------------- | ------------------------------------------------------------------------------------------ |
 | Linters / type checkers | `ruff`, `mypy`, `pyright`, `eslint`, `tsc` (with `--noEmit`), `shellcheck`, `actionlint`, `yamllint`, `pylint`, `flake8` |
 | Search / inspection    | `rg`, `ast-grep`, `jq`, `yq`                                                               |
+
+> **Note (2026-05-14, partial supersession by ADR-010):** `eslint`
+> is reclassified to Forbidden by
+> [ADR-010](ADR-010-static-analysis-only-clarification.md) §Decision §1
+> (loads `eslint.config.js` / `.eslintrc.js` from PR head as
+> executable JavaScript — the threat class §"Why no test execution"
+> excludes). ADR-010 §2 also documents wildcard-pattern limits.
 
 Forbidden entries:
 

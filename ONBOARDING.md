@@ -134,20 +134,34 @@ Values for the named consumers are tabled in
    static-analysis stack. **Before copying any `extra_allowed_tools`
    value verbatim, audit it against
    [ADR-004](docs/adr/ADR-004-allowlist-policy.md) §"Forbidden
-   entries".** Specifically known unsafe patterns currently in the
-   P7 table that must be tightened before use:
-   - `Bash(tsc:*)` (prix-guesser only — `epistemic-agency`'s row
-     has `Bash(eslint:*)` and does not need tightening here).
-     ADR-004 allows `tsc` only with `--noEmit`. Per Claude Code
-     permission patterns, the `:*` wildcard only matches at the
-     end of a pattern, so `Bash(tsc:--noEmit:*)` would match a
-     literal `tsc:--noEmit` invocation, not `tsc --noEmit`.
-     Tighten to `Bash(tsc --noEmit *)` (space-form pattern) or
-     omit the entry before pasting into the consumer stub.
+   entries" as clarified by
+   [ADR-010](docs/adr/ADR-010-static-analysis-only-clarification.md).**
+   Specifically known unsafe patterns that must be tightened or
+   omitted before use:
+   - `Bash(eslint:*)` or `Bash(eslint *)` (any row). ESLint loads
+     `eslint.config.js` / `.eslintrc.js` from the PR head and
+     executes them as JavaScript — the same code-execution threat
+     class ADR-004 §"Why no test execution" excludes. Reclassified
+     to Forbidden by ADR-010 §Decision §1. Omit the entry; TS-stack
+     repos rely on `Bash(tsc --noEmit *)` only. Prior versions of
+     the P7 table listed `Bash(eslint:*)` for `epistemic-agency`
+     and `prix-guesser`; both have been removed.
+   - `Bash(tsc:*)` (any row). ADR-004 allows `tsc` only with
+     `--noEmit`. Per Claude Code permission patterns, the `:*`
+     wildcard only matches at the end of a pattern, so
+     `Bash(tsc:--noEmit:*)` would match a literal `tsc:--noEmit`
+     invocation, not `tsc --noEmit`. Tighten to
+     `Bash(tsc --noEmit *)` (space-form pattern) or omit the entry
+     before pasting into the consumer stub. Known limitation per
+     ADR-010 §Decision §2: `Bash(tsc --noEmit *)` is itself
+     argument-injection-defeatable (`tsc --noEmit false a.ts`
+     emits); blast radius is academic at the review path.
    - Any wildcard `Bash(<tool>:*)` for a compile-capable tool
      (cargo, npm build, make, cmake) — pin to non-emitting flags
      only using the space-form pattern
-     `Bash(<tool> <safe-flag> *)`.
+     `Bash(<tool> <safe-flag> *)`. The argument-injection caveat
+     from ADR-010 §Decision §2 applies to every space-form
+     wildcard; evaluate blast radius per tool.
 
 ## Per-repo agent brief
 
