@@ -324,12 +324,45 @@ designed.
 **Signal observed during 2026-05-14 prix-guesser P7 dispatch:**
 
 - **Recipe-vs-reality mismatch.** `ONBOARDING.md §Prerequisites`
-  mixed genuinely-unautomatable ops (GitHub App installation,
-  which requires the marketplace/installations UI) with
-  API-callable ops (branch protection via
-  `gh api PUT branches/<branch>/protection`, secret-add via
-  `gh secret set`). Only the former are truly human-only; the
-  latter were misclassified.
+  treated all listed items as a single class of human-only
+  preconditions. The 2026-05-14 prix-guesser dispatch (which
+  produced the per-escalation file
+  `.planning/auto-execution/escalations/ESCALATION-2026-05-14T08:11:23Z.md`
+  — local-only per the `.planning/auto-execution/` blanket
+  gitignore; the substantive observation is preserved here because
+  the source file is by design not committed) shows the items are
+  actually three distinct classes:
+  1. **Truly UI-bound on first use.** A GitHub App's *initial*
+     installation on an account
+     (`https://github.com/apps/<app>/installations/new`) is
+     browser-only — there is no token an external API call could
+     present as the install-time identity. CodeRabbit App
+     first-install falls here.
+  2. **API-callable without third-party credential.** Add a repo
+     to an *existing* GitHub App installation
+     (`PUT /user/installations/{installation_id}/repositories/{repository_id}`);
+     enable branch protection
+     (`PUT /repos/.../branches/.../protection`). The actor
+     presents only their own auth (with admin scope) plus a
+     setting payload. No third-party credential changes hands.
+  3. **API-callable but credential-bearing.** `gh secret set`
+     requires the actor to *hold the plaintext secret value at
+     the moment of the call*. The operation is API-callable, but
+     the security analysis is different from class (2): designing
+     a script or agent path here means designing how the secret
+     is captured, kept briefly, and destroyed. The maintainer's
+     `claude setup-token` flow plus a careful local-capture
+     script (no argv exposure, no shell history, secure tmpfile
+     cleanup, `unset` at end) is one such design — but it is a
+     design, not a free win, and any product-onboarding shape has
+     to take a position on whether class (3) is acceptable for an
+     agent path or stays maintainer-only. ADR-006's intent that
+     the maintainer provisions secrets is the conservative
+     default.
+
+  Implication: a future install/onboarding design cannot collapse
+  these three back into "human prereqs" without losing real
+  granularity.
 - **Dev-run-recipe vs product-recipe conflation.** `ONBOARDING.md`
   was authored as the dev-run recipe for `/goal`-driven internal-
   consumer onboarding. Its naming invited reading it as a
@@ -352,17 +385,20 @@ designed.
   — agent prints the planned action, applies it if pre-authorized,
   escalates only if pre-authorization is missing — is not yet
   expressed anywhere in the docs.
-- **`EXECUTION-MODEL.md` policy on high-stakes escalation.** Lines
-  29–33 explicitly classify branch protection as escalation
-  territory ("repo settings, branch protection, force-pushes,
+- **`EXECUTION-MODEL.md` policy on high-stakes escalation.**
+  Inside `EXECUTION-MODEL.md §"Agent-to-agent mailbox channel
+  (post-install)"`, the paragraph beginning *"High-stakes
+  decisions still route to the maintainer through the normal
+  escalation path"* enumerates the escalation territory and
+  includes "repo settings, branch protection, force-pushes,
   release tags, ADR creation or supersession, allowlist changes,
   security-impacting changes, and any workflow-contract change
-  whose blast radius is unclear"). That policy was authored before
-  this experience; we now have data points about its friction cost
-  for canonical-template operations on named-consumer repos. Any
-  resolution that wants `/goal` to apply canonical settings without
-  escalation requires deliberate amendment to this list, not an
-  inline recipe tweak.
+  whose blast radius is unclear." That policy was authored before
+  this experience; we now have data points about its friction
+  cost for canonical-template operations on named-consumer repos.
+  Any resolution that wants `/goal` to apply canonical settings
+  without escalation requires deliberate amendment to that
+  paragraph (or a superseding ADR), not an inline recipe tweak.
 - **Deterministic-script vs agent-applies pattern.** The same
   canonical action (e.g., enable BP with the agentic-ops template)
   can ship as `bin/setup-consumer.sh`, as an agent task with a
@@ -382,21 +418,32 @@ designed.
   set implies consent; ADR-009-style ADRs are the consent
   mechanism; per-action prompts are reserved for repos outside the
   named set.
-- (toward marketplace-install) the substrate becomes a GitHub App
-  with a marketplace listing; the maintainer of a consumer repo
-  clicks "install" in the UI; the app does the rest. This pattern
-  is currently excluded by ROADMAP §"What's NOT on the roadmap"
-  ("Building a TUI / desktop app"), but a GitHub App is not a
-  desktop app; this would need an explicit roadmap addition.
+- (toward marketplace-install) the substrate becomes a GitHub
+  App with a marketplace listing; the maintainer of a consumer
+  repo clicks "install" in the UI; the app does the rest. This
+  pattern is currently blocked by
+  [ADR-006](docs/adr/ADR-006-bounded-deployment-scope.md) §3
+  ("no installer is published to a marketplace, advertised as a
+  public install path, or documented for non-`loganrooks/*`
+  adopters") and §4 ("No marketing copy, no marketplace listing,
+  no 'agentic-ops template' repo for outside use"). Unblocking
+  requires ADR-006's three-prong supersession (OQ-1 + ADR-007
+  prerequisites + new auth-model ADR), not merely a roadmap
+  addition. ROADMAP §"What's NOT on the roadmap" excludes
+  "Building a TUI / desktop app" — that is a *separate* non-goal,
+  not the marketplace-install gate.
 - (toward hybrid) different operations route to different
   mechanisms: settings → script, content → agent, app install →
   manual UI, secrets → maintainer-provided then script-applied.
 
 **Constraint:** any resolution must respect ADR-006's bounded-
-deployment scope and ADR-007's threat-model gating. Anything that
-relaxes those requires a superseding ADR. `EXECUTION-MODEL.md`'s
-high-stakes-escalation list (lines 29–33) is also an active
-constraint until amended by an ADR or a directly-justified edit.
+deployment scope and ADR-007's threat-model gating. Anything
+that relaxes those requires a superseding ADR.
+`EXECUTION-MODEL.md`'s high-stakes-escalation enumeration (in
+§"Agent-to-agent mailbox channel (post-install)", paragraph
+beginning *"High-stakes decisions still route..."*) is also an
+active constraint until amended by an ADR or a
+directly-justified edit.
 
 **Out of scope for this OQ.** Widening `/goal`'s scope on the
 current dev run is a separate decision about `EXECUTION-MODEL.md`,
@@ -409,10 +456,14 @@ being *built* via autonomous execution.
 [OQ-11](#oq-11--wide-deployment-readiness-shape) (readiness work
 shape; mentions "installer" once as part of the full-stack option
 without designing it),
-ROADMAP §"What's NOT on the roadmap" (TUI/desktop app excluded),
-`.planning/EXECUTION-MODEL.md` lines 29–33 (escalation territory),
+ROADMAP §"What's NOT on the roadmap" (TUI/desktop app excluded —
+separate non-goal from the marketplace-install gate),
+`.planning/EXECUTION-MODEL.md` §"Agent-to-agent mailbox channel
+(post-install)", paragraph beginning *"High-stakes decisions still
+route..."* (escalation territory),
 [ADR-006](docs/adr/ADR-006-bounded-deployment-scope.md) §3 (no
-installer for external use until trigger conditions met),
+installer / marketplace listing for external use until trigger
+conditions met) and §4 (repo visibility / no marketplace listing),
 [ADR-009](docs/adr/ADR-009-consumer-cap-relaxation.md) §Decision §1
 (consumer set definition; potential standing-consent artifact).
 
