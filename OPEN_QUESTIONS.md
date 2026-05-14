@@ -301,6 +301,123 @@ must be covered before external rollout) are not.
 
 ---
 
+## OQ-12 — Frictionless install/onboarding shape
+
+**Question:** What does the install/onboarding experience look like
+for the eventual product, distinct from the current `/goal`-driven
+dev-run recipe in `ONBOARDING.md`? Specifically: which prerequisites
+are genuinely human (truly-UI-only operations, policy decisions)
+versus which can be agent-applied or scripted; how is standing
+consent for canonical-template operations recorded; how does the
+system handle an inform-and-approve gate without forcing per-action
+friction; whether the deployment surface is a script, an agent, an
+installer, a marketplace install, or some combination.
+
+**Deferred:** until either (a) OQ-1 resolves toward "open-source
+product" per ADR-006's three-prong gate, or (b) internal-scale
+operation (P7 onboarding of the named-consumer set, plus P8
+observability) produces enough friction data to design against.
+The current dev-run recipe in `ONBOARDING.md` is *not* a product
+artifact and should not be treated as one when the product shape is
+designed.
+
+**Signal observed during 2026-05-14 prix-guesser P7 dispatch:**
+
+- **Recipe-vs-reality mismatch.** `ONBOARDING.md §Prerequisites`
+  mixed genuinely-unautomatable ops (GitHub App installation,
+  which requires the marketplace/installations UI) with
+  API-callable ops (branch protection via
+  `gh api PUT branches/<branch>/protection`, secret-add via
+  `gh secret set`). Only the former are truly human-only; the
+  latter were misclassified.
+- **Dev-run-recipe vs product-recipe conflation.** `ONBOARDING.md`
+  was authored as the dev-run recipe for `/goal`-driven internal-
+  consumer onboarding. Its naming invited reading it as a
+  product-onboarding doc. These are different artifacts and need
+  separate naming, scope, and audience when the product shape is
+  designed.
+- **Standing-consent pattern.**
+  [ADR-009](docs/adr/ADR-009-consumer-cap-relaxation.md)
+  §Decision §1 names the consumer set. This *could* be the
+  artifact via which standing authorization for canonical-template
+  operations is recorded (i.e., "membership in the named set
+  implies consent to apply the canonical pattern"). Or it could be
+  the wrong abstraction (too coarse-grained; needs per-operation
+  granularity). Open.
+- **Inform-and-approve gate as distinct from halt-on-setting.**
+  Two different ways to handle setting changes; conflating them
+  produces either too much friction (halt on every setting change,
+  forcing the maintainer to scroll through git settings UI) or too
+  little safety (any agent action on any setting). A third pattern
+  — agent prints the planned action, applies it if pre-authorized,
+  escalates only if pre-authorization is missing — is not yet
+  expressed anywhere in the docs.
+- **`EXECUTION-MODEL.md` policy on high-stakes escalation.** Lines
+  29–33 explicitly classify branch protection as escalation
+  territory ("repo settings, branch protection, force-pushes,
+  release tags, ADR creation or supersession, allowlist changes,
+  security-impacting changes, and any workflow-contract change
+  whose blast radius is unclear"). That policy was authored before
+  this experience; we now have data points about its friction cost
+  for canonical-template operations on named-consumer repos. Any
+  resolution that wants `/goal` to apply canonical settings without
+  escalation requires deliberate amendment to this list, not an
+  inline recipe tweak.
+- **Deterministic-script vs agent-applies pattern.** The same
+  canonical action (e.g., enable BP with the agentic-ops template)
+  can ship as `bin/setup-consumer.sh`, as an agent task with a
+  canonical-settings appendix, as both (script-as-source-of-truth,
+  agent-calls-script), or as neither (relying entirely on
+  manual or marketplace install). No artifact currently says which.
+
+**What would resolve:**
+
+- (toward deterministic script) install/onboarding ships primarily
+  as a `bin/setup-<thing>.sh` script suite that is idempotent and
+  replayable; agents call the same scripts as humans do; the
+  script is the single source of truth for setup operations.
+- (toward agent-applies-with-standing-consent) onboarding is an
+  agent task that reads a canonical-settings artifact (ADR or
+  appendix) and applies it to repos whose membership in a named
+  set implies consent; ADR-009-style ADRs are the consent
+  mechanism; per-action prompts are reserved for repos outside the
+  named set.
+- (toward marketplace-install) the substrate becomes a GitHub App
+  with a marketplace listing; the maintainer of a consumer repo
+  clicks "install" in the UI; the app does the rest. This pattern
+  is currently excluded by ROADMAP §"What's NOT on the roadmap"
+  ("Building a TUI / desktop app"), but a GitHub App is not a
+  desktop app; this would need an explicit roadmap addition.
+- (toward hybrid) different operations route to different
+  mechanisms: settings → script, content → agent, app install →
+  manual UI, secrets → maintainer-provided then script-applied.
+
+**Constraint:** any resolution must respect ADR-006's bounded-
+deployment scope and ADR-007's threat-model gating. Anything that
+relaxes those requires a superseding ADR. `EXECUTION-MODEL.md`'s
+high-stakes-escalation list (lines 29–33) is also an active
+constraint until amended by an ADR or a directly-justified edit.
+
+**Out of scope for this OQ.** Widening `/goal`'s scope on the
+current dev run is a separate decision about `EXECUTION-MODEL.md`,
+not about this OQ. This OQ is about the eventual product
+install/onboarding, distinct from how the substrate is currently
+being *built* via autonomous execution.
+
+**Cross-references:**
+[OQ-1](#oq-1--personal-tooling-vs-open-source-product) (positioning),
+[OQ-11](#oq-11--wide-deployment-readiness-shape) (readiness work
+shape; mentions "installer" once as part of the full-stack option
+without designing it),
+ROADMAP §"What's NOT on the roadmap" (TUI/desktop app excluded),
+`.planning/EXECUTION-MODEL.md` lines 29–33 (escalation territory),
+[ADR-006](docs/adr/ADR-006-bounded-deployment-scope.md) §3 (no
+installer for external use until trigger conditions met),
+[ADR-009](docs/adr/ADR-009-consumer-cap-relaxation.md) §Decision §1
+(consumer set definition; potential standing-consent artifact).
+
+---
+
 ## How this list evolves
 
 - New questions go here as they emerge.
