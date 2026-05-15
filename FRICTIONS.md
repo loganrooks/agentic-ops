@@ -295,45 +295,120 @@ These gaps cumulatively create:
   uncertain (called out in STATE.md `## Discipline note for /goal
   resume`).
 
-**Workaround used.** Three artifacts drafted as a coordination kit:
+**Workaround used (initial draft 2026-05-14T20:50Z, machine-wide).**
+Three artifacts drafted in personal locations:
 
-- `~/.local/bin/escalation-poller.sh` — supervisor-side poller for
-  the escalations directory; macOS osascript notifications.
+- `~/.local/bin/escalation-poller.sh` — supervisor-side poller.
 - `~/.claude/skills/escalation-watch/SKILL.md` — supervisor-side
-  Claude Code skill describing the per-file resolution protocol,
-  adjudication buckets (maintainer-only / policy-on-file /
-  ambiguous), and STATE.md sync responsibilities.
-- `.planning/auto-execution/goal-prompt-amendment.md` — paragraph
-  to paste into the /goal prompt at session start; defines the
-  DORMANT state, polling cadence (60s for first 10 min, 5 min for
-  next hour, 15 min after; 4-hour timeout writes follow-up
-  escalation), and prohibits unilateral state mutation /
-  re-litigation.
+  Claude Code skill.
+- `.planning/auto-execution/goal-prompt-amendment.md` — /goal
+  prompt amendment paragraph.
 
-These are mitigation, not a structural fix — they are not yet kernel
-surface (no installer, no schema, not referenced from
-EXECUTION-MODEL.md). Future iteration after empirical use should
-fold the contract into EXECUTION-MODEL.md as a first-class section
-("§ Escalation dormancy contract").
+**Repo-scoped refactor (2026-05-15, PR #20).** After verifying that
+both Codex and Claude Code support project-level skill discovery
+(Codex via `.agents/skills/` walked from CWD up to repo root per
+[OpenAI docs](https://developers.openai.com/codex/skills); Claude
+Code via `.claude/skills/`), the kit moved into the repo:
+
+- [`.agents/skills/escalation-dormancy/SKILL.md`](.agents/skills/escalation-dormancy/SKILL.md)
+  — Codex /goal-side skill with the higher-reasoning supervisor
+  framing (you escalate to a smarter agent, not a passive notifier).
+- [`.agents/skills/escalation-dormancy/scripts/wait-for-resolution.sh`](.agents/skills/escalation-dormancy/scripts/wait-for-resolution.sh)
+  — bundled blocking poller. fswatch-event-driven on macOS when
+  available, cadenced polling fallback otherwise. **Zero tokens
+  consumed while blocking** (single foreground bash tool call).
+  4h timeout writes follow-up escalation.
+- [`.claude/skills/escalation-watch/SKILL.md`](.claude/skills/escalation-watch/SKILL.md)
+  — supervisor-side skill. Adjudication buckets, RESOLVED-line
+  drafting, STATE.md sync.
+- [`scripts/escalation-poller.sh`](scripts/escalation-poller.sh)
+  — supervisor-side directory watcher with macOS osascript
+  notifications. Repo-portable (takes `--dir`).
+- [`.planning/EXECUTION-MODEL.md`](.planning/EXECUTION-MODEL.md)
+  §"Escalation dormancy contract" — the always-on protocol contract
+  (read on every GO bootstrap via AGENTS.md).
+
+The personal `goal-prompt-amendment.md` is now a pointer to the
+codified version (preserved for audit).
 
 **Long-term resolutions to consider:**
 
-- Codify the dormancy contract into EXECUTION-MODEL.md as a
-  protocol-level section (matching §"User-resolved escalation").
-- Ship the poller + skill as part of the agentic-ops install
-  pipeline (cf. OQ-12 install/onboarding shape).
+- ~~Codify the dormancy contract into EXECUTION-MODEL.md as a
+  protocol-level section.~~ **Done in PR #20.**
+- ~~Ship the poller + skill as part of the agentic-ops install
+  pipeline (cf. OQ-12 install/onboarding shape).~~ **Skills + scripts
+  now committed to repo per PR #20; consumer-repo install (e.g.,
+  montage_cli) is a copy-into-repo operation, future installer per
+  OQ-12.**
 - Replace osascript notifications with a more portable channel
-  (e.g., a webhook into the supervisor's chat) so the loop works
-  off-Mac.
-- Investigate whether the /goal Codex application can ping the
-  supervisor session directly without the escalation file as
-  intermediary (the user-noted wishlist; currently not supported,
-  formal escalation file is the mechanism).
+  (webhook into supervisor's chat, or agentic-mail urgent-types when
+  v0.2 ships) so the loop works off-Mac.
+- Route the supervisor↔executor wake mechanism through agentic-mail
+  v0.2+ urgent/blocking message types (see F-009 + agentic-mail
+  issue #9). Escalation file remains source of truth; mailbox becomes
+  the wake channel.
+- Reframe the dormancy as "/goal accessing a higher-reasoning
+  supervisor" in all future doc updates — the supervisor is the
+  active reasoning agent on the case during DORMANT, not a passive
+  notifier.
 
 **Where systemic fix lands.** EXECUTION-MODEL.md §"Escalation
 dormancy contract" + AGENTS.md §"Hard rules" reference (PR #20,
 opened 2026-05-14T21:15Z); installer surface for the
 supervisor-side companion deferred to OQ-12 resolution.
+
+---
+
+## F-009: agentic-mail framing in current docs underrepresents v0.2+ design intent
+
+**Status:** REPORTED-UPSTREAM (filed as
+[`loganrooks/agentic-mail#9`](https://github.com/loganrooks/agentic-mail/issues/9)
+2026-05-15).
+
+**Surfaced:** 2026-05-15, during F-007 dormancy contract design.
+
+**What.** Current docs in `agentic-mail` and consumer-side prose
+(copied into our `EXECUTION-MODEL.md` §"Agent-to-agent mailbox
+channel" and `.mail/DISCIPLINE.md`) frame agentic-mail v0
+limitations as permanent architectural intent. Specifically:
+
+- DISCIPLINE.md §"Always Escalate" lists "Any action the consuming
+  repository marks as a human gate" as if it's a permanent
+  exclusion, not a v0 limitation.
+- AGENT-MAILBOX-v0.md presents "advisory only" framing without a
+  "v0.2+ urgent/blocking changes this" qualifier.
+- No section describes the v0.2+ message-type taxonomy (advisory /
+  urgent / blocking) that's intended to route HUMAN-GATE
+  coordination through the mailbox.
+
+**Why this matters.** A research agent investigating "should
+escalation resolution route through agentic-mail" correctly read
+the docs and concluded "agentic-mail is permanently out of scope
+for HUMAN-GATE coordination." That conclusion contradicts design
+intent — agentic-mail's whole purpose is exactly these coordinating
+scenarios (escalations, orchestrator↔executor messaging). Future
+contributors and researcher agents will keep building parallel
+substrates for problems v0.2+ is designed to solve natively, then
+need to migrate later.
+
+**Workaround used.** None on the agentic-ops side. The dormancy
+contract (PR #20) uses fswatch + polling fallback as the wake
+mechanism with the understanding that it's pluggable when v0.2 ships.
+
+**Long-term resolutions to consider:**
+
+- agentic-mail docs split current text into "v0: advisory only" and
+  "v0.2+: routes urgent/blocking through mailbox per design intent"
+  (see issue #9).
+- agentic-mail v0.2+ ships urgent/blocking message types and a
+  consumer-side migration note.
+- Consumer repos (agentic-ops, montage_cli, others) update their
+  copied prose when the upstream docs change.
+
+**Where systemic fix lands.** Upstream:
+[`loganrooks/agentic-mail#9`](https://github.com/loganrooks/agentic-mail/issues/9).
+Consumer-side: re-pull agentic-mail prose into `EXECUTION-MODEL.md`
+when v0.2 docs land.
 
 ---
 
