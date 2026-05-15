@@ -394,17 +394,43 @@ loses the in-context state (conversation history, reasoning chain,
 scratchpad) that the agent built up before escalating, and that
 state is hard to reconstruct on a fresh session.
 
-#### Supervisor-side companion (informative)
+#### Higher-reasoning supervisor (the active agent during DORMANT)
 
-A supervisor agent (Claude Code in the maintainer's chat session)
-may also watch the escalations directory. On the supervisor side
-the loop is closed via `~/.local/bin/escalation-poller.sh` (a
-personal utility, not committed) and the `escalation-watch` Claude
-Code skill (also personal). The supervisor's role is to adjudicate
-the escalation, draft the `RESOLVED:` line on maintainer signal,
-and sync `STATE.md`. The autonomous agent need not coordinate
-directly with the supervisor — the escalation file is the only
-shared surface.
+When you escalate, you are not waiting for a human directly. You are
+escalating to a **higher-reasoning supervisor agent** (Claude Code in
+the maintainer's chat session). The supervisor is the active reasoning
+agent on the case during your DORMANT period:
+
+- It has access to the maintainer's signal-channel (the chat).
+- It has full repo context (FRICTIONS.md, OPEN_QUESTIONS.md, ADRs,
+  prior escalation history).
+- It can adjudicate (bot-vs-bot conflicts, policy weighing, drafting
+  clarifying questions) — work you may not be able to do in your
+  limited execution loop.
+- It produces the `RESOLVED:` line that lets you resume cleanly.
+
+The supervisor is not just a notifier. The framing matters: /goal
+escalates because /goal can't decide; the supervisor's value-add is
+doing that deliberation.
+
+The two sides have committed, repo-portable skills:
+
+- **Executor side (you):**
+  [`.agents/skills/escalation-dormancy/SKILL.md`](../.agents/skills/escalation-dormancy/SKILL.md)
+  with bundled
+  [`scripts/wait-for-resolution.sh`](../.agents/skills/escalation-dormancy/scripts/wait-for-resolution.sh)
+  for blocking, zero-token waits.
+- **Supervisor side:**
+  [`.claude/skills/escalation-watch/SKILL.md`](../.claude/skills/escalation-watch/SKILL.md)
+  with companion
+  [`scripts/escalation-poller.sh`](../scripts/escalation-poller.sh)
+  for directory watching with macOS notifications.
+
+Both are committed to the repo and travel to consumer repos via copy
+(or future installer per OQ-12). The escalation file at
+`auto-execution/escalations/ESCALATION-<ts>.md` remains the single
+source of truth and the only shared surface; the wake mechanism
+(fswatch / polling / future agentic-mail urgent-types) is pluggable.
 
 ## Done detection
 
