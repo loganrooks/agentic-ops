@@ -49,6 +49,15 @@ Add a new optional input `effort_level: "default" | "high" | "max"` to
 `review.yml`. Default preserves existing behavior — this is additive
 per ADR-003 and lands on `v1`.
 
+Verification of additivity: when `effort_level` is omitted, the dispatcher
+sets the internal `effort` variable to `default`, the model selection
+override does not fire (`if [ "$effort" = "high" ] ... fi` and the `max`
+branch both no-op), and the prompt-fragment step produces an EMPTY
+`effort_block`. The prompt template's `${{ steps.prompt_bits.outputs.effort_block }}`
+expands to an empty interpolation, leaving the prompt body unchanged
+modulo a single blank line position. Functional behavior — model
+selection, per-mode caps, output format — is unchanged.
+
 ### Semantics
 
 **`default`** (existing behavior).
@@ -135,7 +144,7 @@ behavior change.
   before opting up; they pick a mode based on PR shape and crank
   effort based on stakes.
 - Additive contract preserved (ADR-003): existing callers omitting
-  the input see byte-identical behavior. CBM-style callers can adopt
+  the input see behavior unchanged for callers that omit `effort_level`. CBM-style callers can adopt
   `max` for horizon closeouts without affecting routine reviews.
 - The pattern-match expansion under `max` is documented as part of
   the dial rather than hidden in a free-form prompt change. Future
@@ -171,7 +180,7 @@ behavior change.
 ## Migration
 
 No migration required for existing consumers. The default
-preserves byte-identical behavior. Consumers wanting the new dial:
+preserves behavior unchanged for callers that omit `effort_level`. Consumers wanting the new dial:
 
 ```yaml
 uses: loganrooks/agentic-ops/.github/workflows/review.yml@v1
