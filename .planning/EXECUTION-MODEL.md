@@ -282,6 +282,156 @@ User adds `BLOCKED: <reason>` line. On next `GO`, the agent skips
 the task (marks as blocked in STATE.md), continues to next task.
 Phase checkpoint will note the blockage.
 
+### Escalation dormancy contract
+
+When the agent writes an
+`auto-execution/escalations/ESCALATION-<ts>.md` file per the
+escalation procedure, the agent's session enters **DORMANT** state
+until the escalation file is resolved. This section defines the
+behavior of DORMANT state, exit conditions, and prohibitions.
+
+The motivation: without an explicit dormancy contract, an escalating
+agent has two bad defaults — (a) hard-halt the session (loses
+context if not re-prompted; the maintainer must remember to GO
+again), or (b) start the next thing it thinks is OK to do (collides
+with the supervisor or maintainer doing parallel work, creating the
+shadow-replacement and re-litigation frictions captured in F-003,
+F-004, and F-007 in `FRICTIONS.md`).
+
+#### DORMANT state behavior
+
+While DORMANT, the agent must not:
+
+1. Start the next task in the driver loop.
+2. Modify `STATE.md` beyond setting `task_status: AWAITING_HUMAN`,
+   bumping `last_updated`, and recording the escalation file path
+   under `## Active escalation`.
+3. Re-interpret prior `STATE.md` notes or COMPLETE entries. They
+   are immutable audit records. If the agent believes a prior entry
+   is factually wrong, it must write a new escalation file
+   (`ESCALATION-<ts>-clarify.md`) describing the discrepancy as a
+   question to the maintainer, not edit the prior entry.
+4. Do work that is "ready to do" while waiting. The pause is the
+   contract. A supervisor agent (e.g., Claude Code in the
+   maintainer's chat) may be drafting a response, surfacing
+   context, or syncing other state; concurrent autonomous work
+   creates the shadow-replacement anti-pattern.
+5. Modify any caller-stub workflow file, kernel surface, or
+   consumer repo. Dormant means dormant on the substrate, not just
+   on the current task.
+
+#### Exit conditions
+
+The agent exits DORMANT state on either:
+
+- (a) A line at column 0 matching `RESOLVED:` is present in the
+  escalation file (per §"User-resolved escalation"), OR
+- (b) A line at column 0 matching `BLOCKED:` is present (per
+  §"Permanent escalation"), OR
+- (c) The maintainer adds a new instruction to the agent's
+  conversation context (handled by the agent's normal prompt loop;
+  no polling needed for this case).
+
+#### Polling cadence
+
+For exit conditions (a) and (b), the agent polls the escalation
+file at this cadence:
+
+- First **10 minutes** after writing the file: every **60 seconds**.
+- Next **60 minutes**: every **5 minutes**.
+- After the first hour: every **15 minutes**.
+
+The cadence is back-loaded because most escalations resolve while
+the maintainer is at-keyboard (the first 10 minutes); after that,
+the resolution is async (maintainer in a meeting, etc.) and a
+shorter cadence wastes log lines without reducing latency
+meaningfully.
+
+#### Resolution-line scope verification
+
+Before resuming on a `RESOLVED:` line, the agent verifies the line
+is unambiguously scoped to the escalation file the agent wrote.
+Acceptable forms:
+
+- The line is in the agent's own escalation file (the strongest
+  signal — file-local resolution).
+- The line in another file explicitly names the agent's file by
+  path or basename (e.g., `RESOLVED: ... covers
+  ESCALATION-2026-05-14T20:47:41Z.md and
+  ESCALATION-2026-05-14T20:50:00Z.md`).
+- The maintainer-supplied resolution wording in the line is
+  "all open escalations resolved" (or equivalent unambiguous
+  multi-scope wording).
+
+If the resolution line is ambiguous (e.g., a generic "escalation
+resolved" with multiple unresolved escalations open), the agent
+must NOT resume. Per F-003 adjudication, ambiguous shortcuts
+require a clarification escalation, not unilateral interpretation.
+
+#### Resume protocol
+
+On valid resume:
+
+1. Re-read `STATE.md` from the top.
+2. Trust `STATE.md` notes dated AFTER the agent's pause timestamp
+   as authoritative supervisor-side updates. If a note's reasoning
+   is unclear, escalate clarification rather than re-interpret.
+3. Continue from `current_task_id`.
+4. Update `STATE.md`: flip `Status` from `escalated (...)` back to
+   `active`; flip `## Active escalation` `resolved: false → true`;
+   bump `last_updated`.
+
+#### Dormancy timeout
+
+If the agent remains DORMANT for more than **4 hours** without
+resolution, it must write a follow-up escalation file
+(`ESCALATION-<ts>-timeout.md`) noting the duration and asking
+whether the maintainer intends to resume the session at all. The
+agent then continues to poll per the cadence above.
+
+The agent does not terminate the session on timeout — terminating
+loses the in-context state (conversation history, reasoning chain,
+scratchpad) that the agent built up before escalating, and that
+state is hard to reconstruct on a fresh session.
+
+#### Higher-reasoning supervisor (the active agent during DORMANT)
+
+When you escalate, you are not waiting for a human directly. You are
+escalating to a **higher-reasoning supervisor agent** (Claude Code in
+the maintainer's chat session). The supervisor is the active reasoning
+agent on the case during your DORMANT period:
+
+- It has access to the maintainer's signal-channel (the chat).
+- It has full repo context (FRICTIONS.md, OPEN_QUESTIONS.md, ADRs,
+  prior escalation history).
+- It can adjudicate (bot-vs-bot conflicts, policy weighing, drafting
+  clarifying questions) — work you may not be able to do in your
+  limited execution loop.
+- It produces the `RESOLVED:` line that lets you resume cleanly.
+
+The supervisor is not just a notifier. The framing matters: /goal
+escalates because /goal can't decide; the supervisor's value-add is
+doing that deliberation.
+
+The two sides have committed, repo-portable skills:
+
+- **Executor side (you):**
+  [`.agents/skills/escalation-dormancy/SKILL.md`](../.agents/skills/escalation-dormancy/SKILL.md)
+  with bundled
+  [`scripts/wait-for-resolution.sh`](../.agents/skills/escalation-dormancy/scripts/wait-for-resolution.sh)
+  for blocking, zero-token waits.
+- **Supervisor side:**
+  [`.claude/skills/escalation-watch/SKILL.md`](../.claude/skills/escalation-watch/SKILL.md)
+  with companion
+  [`scripts/escalation-poller.sh`](../scripts/escalation-poller.sh)
+  for directory watching with macOS notifications.
+
+Both are committed to the repo and travel to consumer repos via copy
+(or future installer per OQ-12). The escalation file at
+`auto-execution/escalations/ESCALATION-<ts>.md` remains the single
+source of truth and the only shared surface; the wake mechanism
+(fswatch / polling / future agentic-mail urgent-types) is pluggable.
+
 ## Done detection
 
 DONE when ALL of:

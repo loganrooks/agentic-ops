@@ -69,6 +69,13 @@ of others:
 
 ## Hard rules
 
+- **Honor the escalation dormancy contract.** If you write an
+  escalation file, do not start the next task, do not modify
+  `STATE.md` beyond the AWAITING_HUMAN flip, do not re-litigate
+  prior COMPLETE entries, and do not do parallel "ready" work. See
+  `.planning/EXECUTION-MODEL.md` §"Escalation dormancy contract"
+  for the full polling cadence, exit conditions, and resume
+  protocol.
 - **Do not merge without CodeRabbit review.** CI green is necessary
   but not sufficient. CodeRabbit must post its review and any
   actionable findings must be addressed or explicitly resolved.

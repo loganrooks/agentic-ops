@@ -9,6 +9,12 @@
 .vscode/
 .idea/
 
+# Claude Code personal-state. Skills under .claude/skills/ ARE committed
+# (they're the supervisor-side companion for escalation-watch); local
+# settings overrides and per-user worktree state are not.
+.claude/settings.local.json
+.claude/worktrees/
+
 # BEGIN agentic-mail
 .mail/claude/inbox/
 .mail/claude/processed/
