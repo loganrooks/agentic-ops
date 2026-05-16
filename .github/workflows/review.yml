@@ -103,6 +103,20 @@ on:
         required: false
         type: number
         default: 45
+      effort_level:
+        description: |-
+          Orthogonal effort dial that scales model choice and per-mode
+          attention across the seven review modes. "default" preserves the
+          existing per-mode model and budget caps. "high" promotes every
+          mode except `quick` from Sonnet to Opus and instructs the model
+          to interpret file caps ~1.5x. "max" promotes ALL modes including
+          quick to Opus and removes per-mode caps in the prompt directive
+          (the workflow-level timeout remains the upper bound). Use "max"
+          for high-stakes PRs (e.g. closing a horizon, large diffs) where
+          missing a finding is worse than the extra cost. See ADR-010.
+        required: false
+        type: string
+        default: "default"
     secrets:
       claude_code_oauth_token:
         description: |-
@@ -202,6 +216,7 @@ jobs:
         env:
           BODY: ${{ github.event.comment.body }}
           ENABLED_MODES: ${{ inputs.enabled_modes }}
+          EFFORT_LEVEL: ${{ inputs.effort_level }}
         run: |
           set -euo pipefail
           # Extract first non-empty trimmed line. Strict first-line match
@@ -251,12 +266,36 @@ jobs:
             echo "  trigger=$cmd" >&2
             exit 1
           fi
+          # Effort-level override (ADR-010). The dial is orthogonal to mode:
+          # mode selects the prompt structure and budget shape; effort scales
+          # model power and instructs the model to interpret caps liberally.
+          # Validated against a closed set; unknown values fail fast.
+          case "$EFFORT_LEVEL" in
+            default|"")  effort=default ;;
+            high|max)    effort="$EFFORT_LEVEL" ;;
+            *)
+              echo "Invalid effort_level '$EFFORT_LEVEL'. Must be one of: default, high, max." >&2
+              exit 1
+              ;;
+          esac
+          # high: every mode except quick promotes from Sonnet to Opus.
+          # max: every mode including quick promotes to Opus.
+          # quick is exempt at high effort to preserve its routine-PR purpose
+          # (cheap, fast). Callers wanting a deeper quick pass should pass
+          # max explicitly.
+          if [ "$effort" = "high" ] && [ "$mode" != "quick" ]; then
+            model=claude-opus-4-7
+          fi
+          if [ "$effort" = "max" ]; then
+            model=claude-opus-4-7
+          fi
           {
             echo "mode=$mode"
             echo "model=$model"
             echo "audit_target=$audit_target"
+            echo "effort=$effort"
           } >> "$GITHUB_OUTPUT"
-          echo "Selected mode=$mode model=$model"
+          echo "Selected mode=$mode model=$model effort=$effort"
 
       # Build dynamic prompt fragments from inputs. Multi-line outputs
       # use the heredoc syntax in $GITHUB_OUTPUT.
@@ -265,6 +304,7 @@ jobs:
         env:
           REVIEW_FOCUS_PATHS: ${{ inputs.review_focus_paths }}
           GATES_PATHS: ${{ inputs.gates_paths }}
+          EFFORT: ${{ steps.mode.outputs.effort }}
         run: |
           set -euo pipefail
 
@@ -288,6 +328,48 @@ jobs:
           {
             echo "gates_paths_block<<__GHA_EOF__"
             render_paths_block "File matchers in 'gates' mode" "$GATES_PATHS"
+            echo "__GHA_EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+          # Effort-level directive (ADR-010). Injected near the top of the
+          # prompt so the model reads it before the per-mode caps below.
+          # The model treats this as a multiplier on attention, not a
+          # rewrite of mode semantics.
+          #
+          # For effort=default, effort_text is EMPTY so the prompt body is
+          # unchanged for callers that do not opt in to ADR-010 (additivity
+          # contract per ADR-003).
+          # Build effort_text line by line so individual lines stay shorter
+          # (the original single-line $'...' form lint-warned for length).
+          # Each branch ends with a single string in $effort_text.
+          case "$EFFORT" in
+            default)
+              effort_text=""
+              ;;
+            high)
+              effort_text=$'Effort level: HIGH (ADR-010).\n\n'
+              effort_text+=$'- The model has been promoted to Opus for every mode except quick.\n'
+              effort_text+=$'- Where a per-mode budget says "at most N files", interpret as up to round(1.5 * N) when additional files materially change the review.\n'
+              effort_text+=$'- Do not skim known load-bearing files. If a single file exceeds the per-file attention budget at default effort, spend up to 1.5x the time on it.\n'
+              effort_text+=$'- Survey mode: zones may grow to 10 (vs 8 default) and per-zone files to 9 (vs 6) when justified.\n'
+              effort_text+=$'- Audit mode: total files may grow to 27 (vs 18 default).\n'
+              effort_text+=$'- Reserve at least the final ~10% of the workflow timeout for synthesis and posting. The wrapper script runs INSIDE the job; if Claude reads to the timeout, the job is killed mid-post.'
+              ;;
+            max)
+              effort_text=$'Effort level: MAX (ADR-010).\n\n'
+              effort_text+=$'- The model has been promoted to Opus for ALL modes including quick.\n'
+              effort_text+=$'- Per-mode file caps are removed in this run. Read every file you need to support specific findings; the workflow timeout is the only hard cap.\n'
+              effort_text+=$'- For files >500 lines, scan in chunks until the full file is covered. Do not summarize-and-move-on on a partial read.\n'
+              effort_text+=$'- Spend up to ~90% of the workflow timeout on review. RESERVE the final ~10% (e.g., last 9 minutes of a 90-min job) for synthesis and posting. The wrapper script runs inside the Claude action step; if Claude reads to the workflow timeout, the job is killed before the comment posts.\n'
+              effort_text+=$'- Lower the bar for surfacing findings: include low-confidence findings flagged as such. Prefer false positives over false-negative misses on this run.\n'
+              effort_text+=$'- Pattern-match aggressively for: missing checks in newly-added gate functions, reader/writer field-name drift, ADR contradictions, silent-fallback branches, durable-side-effect-before-validation ordering, off-by-one in cap logic, scope-of-checkpoint-vs-scope-of-gate mismatches, and any new "skip" / "tolerate" / "fallback" branch.\n'
+              effort_text+=$'- Spatial decomposition modes (survey, audit): the zone/file caps in the per-mode prose below are removed in this run. Read until you have evidence for findings; do not budget-pad with redundant reads.'
+              ;;
+          esac
+
+          {
+            echo "effort_block<<__GHA_EOF__"
+            printf '%s\n' "$effort_text"
             echo "__GHA_EOF__"
           } >> "$GITHUB_OUTPUT"
 
@@ -326,6 +408,8 @@ jobs:
             You are reviewing a repository event for ${{ inputs.repo_label != '' && inputs.repo_label || github.event.repository.name }}.
             Invoked mode: ${{ steps.mode.outputs.mode }}.
             Audit target: ${{ steps.mode.outputs.audit_target }}.
+
+            ${{ steps.prompt_bits.outputs.effort_block }}
 
             Workspace layout:
             - Caller's default branch at the repository root.
@@ -458,7 +542,7 @@ jobs:
               (illustrative — output this verbatim wrapped in triple-backticks
               in the comment):
 
-                  Mode: survey | Model: claude-sonnet-4-6
+                  Mode: survey | Model: <model> | Effort: <effort>
                   Zones: <count> | Files read: <count>
                   Runtime: <approx-seconds>s | Run: <run_url>
 
@@ -532,7 +616,7 @@ jobs:
               Output format:
                 - Prepend a metadata header:
 
-                    Mode: audit | Lens: <id-or-"free-form"> | Model: <model>
+                    Mode: audit | Lens: <id-or-"free-form"> | Model: <model> | Effort: <effort>
                     Files read: <n> | Directories traversed: <n>
                     Runtime: <sec>s | Commit SHA: <sha> | Run: <url>
 
