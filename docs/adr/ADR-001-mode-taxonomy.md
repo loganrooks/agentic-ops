@@ -110,6 +110,11 @@ existing explanatory error path. Consumers opt in per repo as they
 need the mode, in line with the evolutionary-architecture commitment
 in `VISION.md` (commitment 4).
 
+> **Note (2026-05-11, amended by ADR-008):** This seven-mode
+> taxonomy is extended by additional matrix-variant mode names; see
+> [ADR-008](ADR-008-l3-mode-variants.md) Decision §2 and §3 for the
+> reserved names and gating semantics.
+
 ## Alternatives considered
 
 **A separate `review-large` mode without spatial decomposition.**

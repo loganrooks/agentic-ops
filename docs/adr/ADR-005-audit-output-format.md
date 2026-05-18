@@ -91,6 +91,9 @@ Files read: <n> | Directories traversed: <n>
 Runtime: <seconds>s | Commit SHA: <sha> | Run: <run-url>
 ```
 
+> **Note (2026-05-11, amended by ADR-008):** The `Mode:` enum is
+> extended; see [ADR-008](ADR-008-l3-mode-variants.md) Decision §5.
+
 Field semantics:
 
 - `Mode`: literal string `audit` or `survey`.

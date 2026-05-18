@@ -140,11 +140,26 @@ ADR's relationship to this one. Specifically:
 - `accepted (provisional)` may transition to any of the above on the
   same rules.
 
-Additionally, when a `partially superseded by` relationship is added,
-a single inline note may be added to the body of the superseded ADR
-*adjacent to the affected portion* (pointing at the superseding ADR
-section). This is the only body edit permitted. No other line may be
-edited after acceptance.
+Additionally, when an `amended by` or `partially superseded by`
+relationship is added, a single inline note may be added to the body
+of the prior ADR *adjacent to the affected portion* (pointing at the
+amending or superseding ADR section). The note serves as an in-body
+navigation breadcrumb for readers scrolling the prior ADR; the
+Status-line marker remains the formal record. This is the only body
+edit permitted. No other line may be edited after acceptance.
+
+The note must:
+- be a single short block (≤7 lines) prefixed with the verbatim
+  marker `**Note (YYYY-MM-DD, <amended|partial supersession> by
+  ADR-MMM):**`,
+- name the section of the amending/superseding ADR readers should
+  consult (e.g. "see [ADR-008](ADR-008-l3-mode-variants.md)
+  Decision §2"),
+- for `amended by`, point at the extension without paraphrasing the
+  new ADR's content (the new ADR is canonical for what it says);
+- for `partially superseded by`, name *which named portion* of the
+  prior ADR is withdrawn and confirm what remains in force, since
+  readers of the prior ADR need to know which decisions still apply.
 
 ## Numbering
 
