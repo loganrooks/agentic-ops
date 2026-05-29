@@ -2,6 +2,9 @@
 
 > Agentic devops for AI-led development — onboards new projects, reviews changes, and evolves with the codebase.
 
+_Part of the `agentic-*` family — see the `agentic-ecosystem` repo
+(`ECOSYSTEM.md`) for what this repo owns and how it composes with its siblings._
+
 ## Status
 
 L1 review substrate (review / quick / deep / gates / opus / survey / audit
